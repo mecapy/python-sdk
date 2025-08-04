@@ -98,7 +98,7 @@ class TestKeycloakAuth:
         with patch("httpx.AsyncClient") as mock_client:
             mock_response = AsyncMock()
             mock_response.status_code = 200
-            mock_response.json.return_value = token_response
+            mock_response.json = AsyncMock(return_value=token_response)
             
             mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=mock_response)
             

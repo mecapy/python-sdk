@@ -132,7 +132,7 @@ class MecaPyClient:
             elif response.status_code == 404:
                 raise NotFoundError("Resource not found")
             elif response.status_code == 422:
-                raise ValidationError("Request validation failed", response.status_code, response.json())
+                raise ValidationError("Request validation failed", response.status_code, await response.json())
             elif 400 <= response.status_code < 500:
                 raise ValidationError(f"Client error: {response.text}", response.status_code)
             elif response.status_code >= 500:
@@ -152,7 +152,7 @@ class MecaPyClient:
             API response with basic information
         """
         response = await self._make_request("GET", "/", authenticated=False)
-        return APIResponse(**response.json())
+        return APIResponse(**await response.json())
     
     async def health_check(self) -> Dict[str, str]:
         """
@@ -162,7 +162,7 @@ class MecaPyClient:
             Health status dictionary
         """
         response = await self._make_request("GET", "/health", authenticated=False)
-        return response.json()
+        return await response.json()
     
     # Authentication endpoints
     async def get_current_user(self) -> UserInfo:
@@ -176,7 +176,7 @@ class MecaPyClient:
             AuthenticationError: If not authenticated
         """
         response = await self._make_request("GET", "/auth/me")
-        return UserInfo(**response.json())
+        return UserInfo(**await response.json())
     
     async def test_protected_route(self) -> ProtectedResponse:
         """
@@ -189,7 +189,7 @@ class MecaPyClient:
             AuthenticationError: If not authenticated
         """
         response = await self._make_request("GET", "/auth/protected")
-        return ProtectedResponse(**response.json())
+        return ProtectedResponse(**await response.json())
     
     async def test_admin_route(self) -> AdminResponse:
         """
@@ -202,7 +202,7 @@ class MecaPyClient:
             AuthenticationError: If not authenticated or not admin
         """
         response = await self._make_request("GET", "/auth/admin")
-        return AdminResponse(**response.json())
+        return AdminResponse(**await response.json())
     
     # Upload endpoints
     async def upload_archive(
@@ -231,16 +231,20 @@ class MecaPyClient:
                 raise ValidationError(f"File not found: {file_path}")
             
             filename = filename or file_path.name
-            file_content = file_path.read_bytes()
         else:
             # Assume it's a file-like object
             if not filename:
                 raise ValidationError("filename is required when using file-like object")
-            file_content = file.read()
         
         # Validate file extension
         if not filename.lower().endswith('.zip'):
             raise ValidationError("Only ZIP files are allowed")
+        
+        # Read file content after validation
+        if isinstance(file, (str, Path)):
+            file_content = file_path.read_bytes()
+        else:
+            file_content = file.read()
         
         # Prepare multipart form data
         files = {
@@ -252,7 +256,7 @@ class MecaPyClient:
             "/upload/archive",
             files=files
         )
-        return UploadResponse(**response.json())
+        return UploadResponse(**await response.json())
     
     @classmethod
     def from_env(cls) -> "MecaPyClient":

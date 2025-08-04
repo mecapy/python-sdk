@@ -113,7 +113,7 @@ class KeycloakAuth:
                 elif response.status_code != 200:
                     raise AuthenticationError(f"Authentication failed: {response.text}")
                 
-                token_data = response.json()
+                token_data = await response.json()
                 self._store_tokens(token_data)
                 
         except httpx.RequestError as e:
@@ -143,7 +143,7 @@ class KeycloakAuth:
                 elif response.status_code != 200:
                     raise AuthenticationError(f"Token refresh failed: {response.text}")
                 
-                token_data = response.json()
+                token_data = await response.json()
                 self._store_tokens(token_data)
                 
         except httpx.RequestError as e:

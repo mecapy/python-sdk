@@ -60,7 +60,7 @@ class TestMecaPyClient:
         with patch.object(client, "_client") as mock_client:
             mock_response = AsyncMock()
             mock_response.status_code = 422
-            mock_response.json.return_value = {"detail": "Validation failed"}
+            mock_response.json = AsyncMock(return_value={"detail": "Validation failed"})
             mock_client.request = AsyncMock(return_value=mock_response)
             
             with pytest.raises(ValidationError, match="Request validation failed"):
@@ -99,7 +99,7 @@ class TestMecaPyClient:
         with patch.object(client_no_auth, "_client") as mock_client:
             mock_response = AsyncMock()
             mock_response.status_code = 200
-            mock_response.json.return_value = response_data
+            mock_response.json = AsyncMock(return_value=response_data)
             mock_client.request = AsyncMock(return_value=mock_response)
             
             result = await client_no_auth.get_root()
@@ -117,7 +117,7 @@ class TestMecaPyClient:
         with patch.object(client_no_auth, "_client") as mock_client:
             mock_response = AsyncMock()
             mock_response.status_code = 200
-            mock_response.json.return_value = response_data
+            mock_response.json = AsyncMock(return_value=response_data)
             mock_client.request = AsyncMock(return_value=mock_response)
             
             result = await client_no_auth.health_check()
@@ -138,7 +138,7 @@ class TestMecaPyClient:
         with patch.object(client, "_client") as mock_client:
             mock_response = AsyncMock()
             mock_response.status_code = 200
-            mock_response.json.return_value = user_data
+            mock_response.json = AsyncMock(return_value=user_data)
             mock_client.request = AsyncMock(return_value=mock_response)
             
             result = await client.get_current_user()
@@ -168,7 +168,7 @@ class TestMecaPyClient:
             
             mock_response = AsyncMock()
             mock_response.status_code = 200
-            mock_response.json.return_value = upload_data
+            mock_response.json = AsyncMock(return_value=upload_data)
             mock_client.request = AsyncMock(return_value=mock_response)
             
             result = await client.upload_archive(file_path)
@@ -191,13 +191,13 @@ class TestMecaPyClient:
             "size": len(file_content)
         }
         
-        with patch.object(file_path, "exists", return_value=True), \
-             patch.object(file_path, "read_bytes", return_value=file_content), \
+        with patch("pathlib.Path.exists", return_value=True), \
+             patch("pathlib.Path.read_bytes", return_value=file_content), \
              patch.object(client, "_client") as mock_client:
             
             mock_response = AsyncMock()
             mock_response.status_code = 200
-            mock_response.json.return_value = upload_data
+            mock_response.json = AsyncMock(return_value=upload_data)
             mock_client.request = AsyncMock(return_value=mock_response)
             
             result = await client.upload_archive(file_path)
@@ -242,7 +242,7 @@ class TestMecaPyClient:
         with patch.object(client, "_client") as mock_client:
             mock_response = AsyncMock()
             mock_response.status_code = 200
-            mock_response.json.return_value = upload_data
+            mock_response.json = AsyncMock(return_value=upload_data)
             mock_client.request = AsyncMock(return_value=mock_response)
             
             result = await client.upload_archive(mock_file, filename="test.zip")
@@ -260,35 +260,29 @@ class TestMecaPyClient:
     
     def test_from_env_default_urls(self):
         """Test from_env with default URLs."""
-        with patch.dict("os.environ", {}, clear=True), \
-             patch("mecapy_sdk.client.KeycloakAuth.from_env") as mock_auth_from_env:
-            
-            mock_auth = AsyncMock()
-            mock_auth_from_env.return_value = mock_auth
-            
+        with patch.dict("os.environ", {}, clear=True):
             client = MecaPyClient.from_env()
             
             assert client.api_url == "https://api.mecapy.com"
-            assert client.auth == mock_auth
+            assert client.auth is None
     
     def test_from_env_success(self):
         """Test successful from_env creation."""
         env_vars = {
             "MECAPY_API_URL": "https://api.example.com",
             "MECAPY_KEYCLOAK_URL": "https://auth.example.com",
+            "MECAPY_USERNAME": "testuser",
+            "MECAPY_PASSWORD": "testpass",
             "MECAPY_TIMEOUT": "45.0"
         }
         
-        with patch.dict("os.environ", env_vars), \
-             patch("mecapy_sdk.client.KeycloakAuth.from_env") as mock_auth_from_env:
-            
-            mock_auth = AsyncMock()
-            mock_auth_from_env.return_value = mock_auth
-            
+        with patch.dict("os.environ", env_vars):
             client = MecaPyClient.from_env()
             
             assert client.api_url == "https://api.example.com"
-            assert client.auth == mock_auth
+            assert client.auth is not None
+            assert client.auth.keycloak_url == "https://auth.example.com"
+            assert client.auth.username == "testuser"
             assert client.timeout == 45.0
     
     def test_from_env_custom_urls(self):
@@ -298,17 +292,9 @@ class TestMecaPyClient:
             "MECAPY_KEYCLOAK_URL": "https://auth.example.com"
         }
         
-        with patch.dict("os.environ", env_vars), \
-             patch("mecapy_sdk.client.KeycloakAuth.from_env") as mock_auth_from_env:
-            
-            mock_auth = AsyncMock()
-            mock_auth_from_env.return_value = mock_auth
-            
+        with patch.dict("os.environ", env_vars):
             client = MecaPyClient.from_env()
             
             assert client.api_url == "https://api.example.com"
-            assert client.auth == mock_auth
+            assert client.auth is None  # No username/password, so no auth
             assert client.timeout == 30.0
-            
-            # Verify that KeycloakAuth.from_env was called (it will use the custom URL)
-            mock_auth_from_env.assert_called_once()
