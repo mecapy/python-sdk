@@ -298,3 +298,79 @@ class TestMecaPyClient:
             assert client.api_url == "https://api.example.com"
             assert client.auth is None  # No username/password, so no auth
             assert client.timeout == 30.0
+    
+    @pytest.mark.asyncio
+    async def test_make_request_auth_token_exception(self, client):
+        """Test request when getting auth token raises exception."""
+        with patch.object(client.auth, "get_access_token", side_effect=Exception("Token error")):
+            with pytest.raises(AuthenticationError, match="Failed to get access token: Token error"):
+                await client._make_request("GET", "/test", authenticated=True)
+    
+    @pytest.mark.asyncio
+    async def test_make_request_403_error(self, client):
+        """Test request with 403 error."""
+        with patch.object(client, "_client") as mock_client:
+            mock_response = AsyncMock()
+            mock_response.status_code = 403
+            mock_client.request = AsyncMock(return_value=mock_response)
+            
+            with pytest.raises(AuthenticationError, match="Access forbidden"):
+                await client._make_request("GET", "/test")
+    
+    @pytest.mark.asyncio
+    async def test_make_request_4xx_error(self, client):
+        """Test request with generic 4xx error."""
+        with patch.object(client, "_client") as mock_client:
+            mock_response = AsyncMock()
+            mock_response.status_code = 400
+            mock_response.text = "Bad Request"
+            mock_client.request = AsyncMock(return_value=mock_response)
+            
+            with pytest.raises(ValidationError, match="Client error: Bad Request"):
+                await client._make_request("GET", "/test")
+    
+    @pytest.mark.asyncio
+    async def test_test_protected_route(self, client):
+        """Test test_protected_route method."""
+        mock_response_data = {
+            "message": "Access granted", 
+            "user_info": {
+                "preferred_username": "testuser",
+                "email": "test@example.com",
+                "roles": ["user"]
+            },
+            "endpoint": "/auth/protected"
+        }
+        
+        with patch.object(client, "_make_request") as mock_request:
+            mock_response = AsyncMock()
+            mock_response.json = AsyncMock(return_value=mock_response_data)
+            mock_request.return_value = mock_response
+            
+            result = await client.test_protected_route()
+            
+            mock_request.assert_called_once_with("GET", "/auth/protected")
+            assert result.message == "Access granted"
+            assert result.user_info.preferred_username == "testuser"
+            assert result.endpoint == "/auth/protected"
+    
+    @pytest.mark.asyncio
+    async def test_test_admin_route(self, client):
+        """Test test_admin_route method."""
+        mock_response_data = {
+            "message": "Admin access granted", 
+            "admin_access": True,
+            "endpoint": "/auth/admin"
+        }
+        
+        with patch.object(client, "_make_request") as mock_request:
+            mock_response = AsyncMock()
+            mock_response.json = AsyncMock(return_value=mock_response_data)
+            mock_request.return_value = mock_response
+            
+            result = await client.test_admin_route()
+            
+            mock_request.assert_called_once_with("GET", "/auth/admin")
+            assert result.message == "Admin access granted"
+            assert result.admin_access is True
+            assert result.endpoint == "/auth/admin"

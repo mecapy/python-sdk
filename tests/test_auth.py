@@ -190,3 +190,97 @@ class TestKeycloakAuth:
             assert auth.client_id == "custom-client"
             assert auth.username == "testuser"
             assert auth.password == "testpass"
+    
+    @pytest.mark.asyncio
+    async def test_get_access_token_with_refresh(self):
+        """Test get_access_token when refresh token is available."""
+        auth = KeycloakAuth("https://auth.example.com", realm="test", client_id="test")
+        auth._access_token = None  # No current token
+        auth._refresh_token = "refresh_token"
+        
+        # Mock the refresh token method
+        with patch.object(auth, '_refresh_access_token') as mock_refresh:
+            mock_refresh.return_value = None
+            auth._access_token = "new_token"  # Set after refresh
+            
+            token = await auth.get_access_token()
+            assert token == "new_token"
+            mock_refresh.assert_called_once()
+    
+    @pytest.mark.asyncio
+    async def test_get_access_token_refresh_fails_fallback_to_new_token(self):
+        """Test get_access_token when refresh fails and falls back to new token."""
+        auth = KeycloakAuth("https://auth.example.com", realm="test", client_id="test")
+        auth._access_token = None
+        auth._refresh_token = "invalid_refresh"
+        
+        with patch.object(auth, '_refresh_access_token') as mock_refresh, \
+             patch.object(auth, '_get_new_token') as mock_new:
+            mock_refresh.side_effect = AuthenticationError("Refresh failed")
+            mock_new.return_value = None
+            auth._access_token = "new_token"  # Set after getting new token
+            
+            token = await auth.get_access_token()
+            assert token == "new_token"
+            mock_refresh.assert_called_once()
+            mock_new.assert_called_once()
+    
+    @pytest.mark.asyncio
+    async def test_get_new_token_non_200_status(self):
+        """Test _get_new_token with non-200 status code."""
+        auth = KeycloakAuth("https://auth.example.com", realm="test", client_id="test")
+        auth.set_credentials("user", "pass")
+        
+        mock_response = AsyncMock()
+        mock_response.status_code = 500
+        mock_response.text = "Internal Server Error"
+        
+        with patch("httpx.AsyncClient.post", return_value=mock_response):
+            with pytest.raises(AuthenticationError, match="Authentication failed: Internal Server Error"):
+                await auth._get_new_token()
+    
+    @pytest.mark.asyncio
+    async def test_refresh_access_token_no_refresh_token(self):
+        """Test _refresh_access_token when no refresh token is available."""
+        auth = KeycloakAuth("https://auth.example.com", realm="test", client_id="test")
+        auth._refresh_token = None
+        
+        with pytest.raises(AuthenticationError, match="No refresh token available"):
+            await auth._refresh_access_token()
+    
+    @pytest.mark.asyncio
+    async def test_refresh_access_token_401_error(self):
+        """Test _refresh_access_token with 401 error."""
+        auth = KeycloakAuth("https://auth.example.com", realm="test", client_id="test")
+        auth._refresh_token = "expired_refresh"
+        
+        mock_response = AsyncMock()
+        mock_response.status_code = 401
+        
+        with patch("httpx.AsyncClient.post", return_value=mock_response):
+            with pytest.raises(AuthenticationError, match="Refresh token expired or invalid"):
+                await auth._refresh_access_token()
+    
+    @pytest.mark.asyncio
+    async def test_refresh_access_token_non_200_status(self):
+        """Test _refresh_access_token with non-200 status code."""
+        auth = KeycloakAuth("https://auth.example.com", realm="test", client_id="test")
+        auth._refresh_token = "valid_refresh"
+        
+        mock_response = AsyncMock()
+        mock_response.status_code = 500
+        mock_response.text = "Server Error"
+        
+        with patch("httpx.AsyncClient.post", return_value=mock_response):
+            with pytest.raises(AuthenticationError, match="Token refresh failed: Server Error"):
+                await auth._refresh_access_token()
+    
+    @pytest.mark.asyncio
+    async def test_refresh_access_token_network_error(self):
+        """Test _refresh_access_token with network error."""
+        auth = KeycloakAuth("https://auth.example.com", realm="test", client_id="test")
+        auth._refresh_token = "valid_refresh"
+        
+        with patch("httpx.AsyncClient.post", side_effect=httpx.RequestError("Network error")):
+            with pytest.raises(NetworkError, match="Network error during token refresh"):
+                await auth._refresh_access_token()
