@@ -8,6 +8,7 @@ import httpx
 from .auth import KeycloakAuth
 from .models import UserInfo, UploadResponse, APIResponse, ProtectedResponse, AdminResponse
 from .config import DEFAULT_API_URL, DEFAULT_KEYCLOAK_URL, DEFAULT_REALM, DEFAULT_CLIENT_ID, DEFAULT_TIMEOUT
+from .__version__ import __version__
 from .exceptions import (
     MecaPyError, 
     AuthenticationError, 
@@ -67,7 +68,7 @@ class MecaPyClient:
         # Create HTTP client
         self._client = httpx.AsyncClient(
             timeout=timeout,
-            headers={"User-Agent": "mecapy-sdk/0.1.0"}
+            headers={"User-Agent": f"mecapy-sdk/{__version__}"}
         )
     
     async def __aenter__(self):
