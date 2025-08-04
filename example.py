@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 
 from mecapy_sdk import MecaPyClient
 from mecapy_sdk.auth import KeycloakAuth
+from mecapy_sdk.config import DEFAULT_API_URL, DEFAULT_KEYCLOAK_URL
 from mecapy_sdk.exceptions import (
     AuthenticationError,
     ValidationError,
@@ -141,6 +142,25 @@ async def error_handling_example():
         print(f"Other error: {e}")
 
 
+async def direct_auth_example():
+    """Direct username/password authentication example."""
+    print("\n=== Direct Authentication Example ===")
+    
+    try:
+        # Create client with direct username/password (no env vars needed)
+        async with MecaPyClient(
+            username="your-username",  # Replace with actual username
+            password="your-password"   # Replace with actual password
+        ) as client:
+            print("Direct auth client created successfully")
+            # This would work with valid credentials:
+            # user = await client.get_current_user()
+            # print(f"Direct auth user: {user.preferred_username}")
+            
+    except Exception as e:
+        print(f"Direct auth example (credentials needed): {e}")
+
+
 async def custom_auth_example():
     """Custom authentication example."""
     print("\n=== Custom Authentication Example ===")
@@ -148,7 +168,7 @@ async def custom_auth_example():
     try:
         # Create custom auth configuration
         auth = KeycloakAuth(
-            keycloak_url="https://auth.mecapy.com",  # Replace with your Keycloak URL
+            keycloak_url=DEFAULT_KEYCLOAK_URL,  # Using config constant
             realm="mecapy",
             client_id="mecapy-api-public"
         )
@@ -156,7 +176,7 @@ async def custom_auth_example():
         # Set credentials (you could also pass them in the constructor)
         # auth.set_credentials("your-username", "your-password")
         
-        async with MecaPyClient("https://api.mecapy.com", auth=auth) as client:
+        async with MecaPyClient(DEFAULT_API_URL, auth=auth) as client:
             # This will work if you have valid credentials
             print("Custom auth client created successfully")
             # user = await client.get_current_user()
@@ -175,13 +195,20 @@ async def main():
     await authentication_example()
     await file_upload_example()
     await error_handling_example()
+    await direct_auth_example()
     await custom_auth_example()
     
     print("\n=== Examples Complete ===")
-    print("\nTo use authentication features, set these environment variables:")
-    print("- MECAPY_USERNAME=your-username")
-    print("- MECAPY_PASSWORD=your-password")
-    print("\n(SDK uses production URLs by default)")
+    print("\nTo use authentication features, you have several options:")
+    print("\n1. Environment variables:")
+    print("   - MECAPY_USERNAME=your-username")
+    print("   - MECAPY_PASSWORD=your-password")
+    print("\n2. Direct parameters:")
+    print('   client = MecaPyClient(username="user", password="pass")')
+    print("\n3. Custom auth object:")
+    print('   auth = KeycloakAuth(username="user", password="pass")')
+    print('   client = MecaPyClient(auth=auth)')
+    print(f"\n(SDK uses production URLs by default: {DEFAULT_API_URL})")
     print("For on-premise, also set:")
     print("- MECAPY_API_URL=https://your-api.company.com")
     print("- MECAPY_KEYCLOAK_URL=https://your-auth.company.com")

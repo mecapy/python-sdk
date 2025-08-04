@@ -5,6 +5,7 @@ from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
 import httpx
 from .exceptions import AuthenticationError, NetworkError
+from .config import DEFAULT_KEYCLOAK_URL, DEFAULT_REALM, DEFAULT_CLIENT_ID
 
 
 class KeycloakAuth:
@@ -13,8 +14,8 @@ class KeycloakAuth:
     def __init__(
         self,
         keycloak_url: str,
-        realm: str = "mecapy",
-        client_id: str = "mecapy-api-public",
+        realm: str = DEFAULT_REALM,
+        client_id: str = DEFAULT_CLIENT_ID,
         username: Optional[str] = None,
         password: Optional[str] = None
     ):
@@ -169,21 +170,21 @@ class KeycloakAuth:
         Create KeycloakAuth instance from environment variables.
         
         Expected environment variables:
-        - MECAPY_KEYCLOAK_URL: Keycloak server URL (optional, defaults to 'https://auth.mecapy.com')
-        - MECAPY_REALM: Keycloak realm (optional, defaults to 'mecapy')
-        - MECAPY_CLIENT_ID: Keycloak client ID (optional, defaults to 'mecapy-api-public')
+        - MECAPY_KEYCLOAK_URL: Keycloak server URL (optional, defaults to DEFAULT_KEYCLOAK_URL)
+        - MECAPY_REALM: Keycloak realm (optional, defaults to DEFAULT_REALM)
+        - MECAPY_CLIENT_ID: Keycloak client ID (optional, defaults to DEFAULT_CLIENT_ID)
         - MECAPY_USERNAME: Username for authentication (optional)
         - MECAPY_PASSWORD: Password for authentication (optional)
         
         Returns:
             KeycloakAuth instance
         """
-        keycloak_url = os.getenv("MECAPY_KEYCLOAK_URL", "https://auth.mecapy.com")
+        keycloak_url = os.getenv("MECAPY_KEYCLOAK_URL", DEFAULT_KEYCLOAK_URL)
         
         return cls(
             keycloak_url=keycloak_url,
-            realm=os.getenv("MECAPY_REALM", "mecapy"),
-            client_id=os.getenv("MECAPY_CLIENT_ID", "mecapy-api-public"),
+            realm=os.getenv("MECAPY_REALM", DEFAULT_REALM),
+            client_id=os.getenv("MECAPY_CLIENT_ID", DEFAULT_CLIENT_ID),
             username=os.getenv("MECAPY_USERNAME"),
             password=os.getenv("MECAPY_PASSWORD"),
         )
