@@ -1,8 +1,14 @@
 # MecaPy SDK
 
+[![CI](https://github.com/mecapy/python-sdk/workflows/CI/badge.svg)](https://github.com/mecapy/python-sdk/actions/workflows/ci.yml)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=mecapy_python-sdk&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=mecapy_python-sdk)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=mecapy_python-sdk&metric=coverage)](https://sonarcloud.io/summary/new_code?id=mecapy_python-sdk)
+[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=mecapy_python-sdk&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=mecapy_python-sdk)
+[![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=mecapy_python-sdk&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=mecapy_python-sdk)
 [![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-pytest-orange.svg)](https://pytest.org/)
+[![PyPI Version](https://img.shields.io/pypi/v/mecapy-sdk)](https://pypi.org/project/mecapy-sdk/)
+[![PyPI Downloads](https://img.shields.io/pypi/dm/mecapy-sdk)](https://pypi.org/project/mecapy-sdk/)
 
 Python SDK for MecaPy API - A clean, simple, and robust client library.
 

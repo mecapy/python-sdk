@@ -36,6 +36,8 @@ dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
     "pytest-httpx>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "coverage[toml]>=7.0.0",
     "ruff>=0.1.0",
     "mypy>=1.5.0",
     "pre-commit>=3.4.0",
@@ -58,7 +60,7 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
-addopts = "-v --tb=short --strict-markers"
+addopts = "-v --tb=short --strict-markers --cov=mecapy_sdk --cov-report=xml --cov-report=html --cov-report=term-missing"
 asyncio_mode = "auto"
 markers = [
     "unit: Unit tests",
@@ -101,6 +103,29 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 warn_return_any = true
 strict_equality = true
+
+[tool.coverage.run]
+source = ["mecapy_sdk"]
+omit = [
+    "tests/*",
+    "*/__init__.py",
+    "*/conftest.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+show_missing = true
+skip_covered = false
+
+[tool.coverage.html]
+directory = "coverage_html"
 
 [[tool.mypy.overrides]]
 module = ["tests.*"]
