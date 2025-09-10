@@ -4,6 +4,7 @@ import os
 from typing import Optional, Dict, Any, BinaryIO, Union
 from pathlib import Path
 import httpx
+import inspect
 
 from .auth import KeycloakAuth
 from .models import UserInfo, UploadResponse, APIResponse, ProtectedResponse, AdminResponse
@@ -83,6 +84,13 @@ class MecaPyClient:
         """Close the HTTP client."""
         await self._client.aclose()
     
+    async def _json(self, response: httpx.Response) -> Dict[str, Any]:
+        """Return JSON from response, awaiting if the test/mocks provide a coroutine."""
+        data = response.json()
+        if inspect.isawaitable(data):
+            return await data
+        return data
+
     async def _make_request(
         self,
         method: str,
@@ -132,7 +140,7 @@ class MecaPyClient:
             elif response.status_code == 404:
                 raise NotFoundError("Resource not found")
             elif response.status_code == 422:
-                raise ValidationError("Request validation failed", response.status_code, await response.json())
+                raise ValidationError("Request validation failed", response.status_code, await self._json(response))
             elif 400 <= response.status_code < 500:
                 raise ValidationError(f"Client error: {response.text}", response.status_code)
             elif response.status_code >= 500:
@@ -152,7 +160,8 @@ class MecaPyClient:
             API response with basic information
         """
         response = await self._make_request("GET", "/", authenticated=False)
-        return APIResponse(**await response.json())
+        data = await self._json(response)
+        return APIResponse(**data)
     
     async def health_check(self) -> Dict[str, str]:
         """
@@ -162,7 +171,7 @@ class MecaPyClient:
             Health status dictionary
         """
         response = await self._make_request("GET", "/health", authenticated=False)
-        return await response.json()
+        return await self._json(response)
     
     # Authentication endpoints
     async def get_current_user(self) -> UserInfo:
@@ -176,7 +185,14 @@ class MecaPyClient:
             AuthenticationError: If not authenticated
         """
         response = await self._make_request("GET", "/auth/me")
-        return UserInfo(**await response.json())
+        data = await self._json(response)
+        # Normalize production variants: some deployments may return `username` instead of `preferred_username`
+        if isinstance(data, dict):
+            if "preferred_username" not in data and "username" in data:
+                # Avoid mutating the original dict if it's shared
+                data = dict(data)
+                data["preferred_username"] = data["username"]
+        return UserInfo(**data)
     
     async def test_protected_route(self) -> ProtectedResponse:
         """
@@ -189,7 +205,16 @@ class MecaPyClient:
             AuthenticationError: If not authenticated
         """
         response = await self._make_request("GET", "/auth/protected")
-        return ProtectedResponse(**await response.json())
+        data = await self._json(response)
+        # Normalize production variants for nested user_info
+        if isinstance(data, dict):
+            ui = data.get("user_info")
+            if isinstance(ui, dict) and "preferred_username" not in ui and "username" in ui:
+                ui = dict(ui)
+                ui["preferred_username"] = ui["username"]
+                data = dict(data)
+                data["user_info"] = ui
+        return ProtectedResponse(**data)
     
     async def test_admin_route(self) -> AdminResponse:
         """
@@ -202,7 +227,8 @@ class MecaPyClient:
             AuthenticationError: If not authenticated or not admin
         """
         response = await self._make_request("GET", "/auth/admin")
-        return AdminResponse(**await response.json())
+        data = await self._json(response)
+        return AdminResponse(**data)
     
     # Upload endpoints
     async def upload_archive(
@@ -256,7 +282,8 @@ class MecaPyClient:
             "/upload/archive",
             files=files
         )
-        return UploadResponse(**await response.json())
+        data = await self._json(response)
+        return UploadResponse(**data)
     
     @classmethod
     def from_env(cls) -> "MecaPyClient":

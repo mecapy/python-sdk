@@ -66,6 +66,7 @@ markers = [
     "unit: Unit tests",
     "integration: Integration tests",
     "auth: Authentication related tests",
+    "production: Tests to run against production environment",
 ]
 
 [tool.ruff]

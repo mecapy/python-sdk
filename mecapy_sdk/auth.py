@@ -4,12 +4,20 @@ import os
 from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
 import httpx
+import inspect
 from .exceptions import AuthenticationError, NetworkError
 from .config import DEFAULT_KEYCLOAK_URL, DEFAULT_REALM, DEFAULT_CLIENT_ID
 
 
 class KeycloakAuth:
     """Handles Keycloak authentication for MecaPy API."""
+    
+    async def _json(self, response: httpx.Response) -> Dict[str, Any]:
+        """Return JSON from response, awaiting if mocks return coroutine."""
+        data = response.json()
+        if inspect.isawaitable(data):
+            return await data
+        return data
     
     def __init__(
         self,
@@ -113,7 +121,7 @@ class KeycloakAuth:
                 elif response.status_code != 200:
                     raise AuthenticationError(f"Authentication failed: {response.text}")
                 
-                token_data = await response.json()
+                token_data = await self._json(response)
                 self._store_tokens(token_data)
                 
         except httpx.RequestError as e:
@@ -143,7 +151,7 @@ class KeycloakAuth:
                 elif response.status_code != 200:
                     raise AuthenticationError(f"Token refresh failed: {response.text}")
                 
-                token_data = await response.json()
+                token_data = await self._json(response)
                 self._store_tokens(token_data)
                 
         except httpx.RequestError as e:
