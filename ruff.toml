@@ -1,0 +1,36 @@
+line-length = 120
+indent-width = 4
+target-version = "py313"
+
+[format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "lf"
+docstring-code-format = true
+
+[lint]
+select = [
+    "E", # Erreurs
+    "W", # Warnings (avertissements)
+    "F", # Fonctionnalité
+    "I", # Isort
+    "C", # Complexité
+    "B", # Bugs
+    "D", # Docstrings
+    "R", # Refactoring
+    "UP", # Pyupgrade
+    "TRY", # Prevent Exception Handling AntiPatterns
+    "C4", # flake8-comprehensions
+    "DTZ",  # ban the usage of unsafe naive datetime class
+
+#    "FAST", # FastAPI specific
+    "NPY", # Numpy specific
+    "PD", # Panda
+]
+
+[lint.pydocstyle]
+convention = "numpy"
+
+[lint.mccabe]
+max-complexity = 5

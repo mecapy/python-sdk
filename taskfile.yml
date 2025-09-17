@@ -1,0 +1,214 @@
+version: '3'
+
+# Taskfile for go-task (https://taskfile.dev)
+# Provides common developer workflows for this Python SDK project.
+
+vars:
+  SDK_MODULE: mecapy_sdk
+  EXAMPLE_FILE: example.py
+
+# Load environment from local files when present
+dotenv: [ ".env.local", ".env" ]
+
+tasks:
+  default:
+    desc: "Show available tasks"
+    cmds:
+      - task --list
+
+  install:
+    desc: "Install project dependencies (uses uv if available, falls back to pip)"
+    cmds:
+      - |
+        if command -v uv >/dev/null 2>&1; then
+          echo "Using uv to sync dependencies..."
+          uv sync --group dev
+        else
+          echo "uv not found, using pip (editable + dev extras)..."
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+        fi
+
+  test:
+    desc: "Run tests with pytest and coverage"
+    deps: [ install ]
+    cmds:
+      - |
+        if command -v uv >/dev/null 2>&1; then
+          uv run pytest
+        else
+          pytest
+        fi
+
+  test:unit:
+    desc: "Run unit tests only"
+    deps: [ install ]
+    cmds:
+      - |
+        if command -v uv >/dev/null 2>&1; then
+          uv run pytest -m unit
+        else
+          pytest -m unit
+        fi
+
+  test:integration:
+    desc: "Run integration tests only"
+    deps: [ install ]
+    cmds:
+      - |
+        if command -v uv >/dev/null 2>&1; then
+          uv run pytest -m integration
+        else
+          pytest -m integration
+        fi
+
+  test:auth:
+    desc: "Run authentication tests only"
+    deps: [ install ]
+    cmds:
+      - |
+        if command -v uv >/dev/null 2>&1; then
+          uv run pytest -m auth
+        else
+          pytest -m auth
+        fi
+
+  lint:
+    desc: "Run ruff lint checks"
+    deps: [ install ]
+    cmds:
+      - |
+        if command -v uv >/dev/null 2>&1; then
+          uv run ruff check .
+        else
+          ruff check .
+        fi
+
+  lint:fix:
+    desc: "Run ruff lint checks with --fix"
+    deps: [ install ]
+    cmds:
+      - |
+        if command -v uv >/dev/null 2>&1; then
+          uv run ruff check --fix .
+        else
+          ruff check --fix .
+        fi
+
+  format:
+    desc: "Format code with ruff"
+    deps: [ install ]
+    cmds:
+      - |
+        if command -v uv >/dev/null 2>&1; then
+          uv run ruff format .
+        else
+          ruff format .
+        fi
+
+  typecheck:
+    desc: "Type-check with mypy"
+    deps: [ install ]
+    cmds:
+      - |
+        if command -v uv >/dev/null 2>&1; then
+          uv run mypy {{.SDK_MODULE}}
+        else
+          mypy {{.SDK_MODULE}}
+        fi
+
+  build:
+    desc: "Build wheel and sdist using hatchling (via uv if available)"
+    deps: [ install ]
+    cmds:
+      - |
+        if command -v uv >/dev/null 2>&1; then
+          uv build
+        else
+          python -m build
+        fi
+
+  example:
+    desc: "Run the example script"
+    deps: [ install ]
+    cmds:
+      - |
+        if command -v uv >/dev/null 2>&1; then
+          uv run python {{.EXAMPLE_FILE}}
+        else
+          python {{.EXAMPLE_FILE}}
+        fi
+
+  clean:
+    desc: "Clean build, cache and test artifacts"
+    cmds:
+      - rm -rf dist build *.egg-info .mypy_cache .ruff_cache .pytest_cache .coverage coverage_html htmlcov coverage.xml
+
+  # Quality checks
+  check:
+    desc: "Run all quality checks (lint, typecheck, test)"
+    deps: [ lint, typecheck, test ]
+
+  # Pre-commit hooks
+  pre-commit:install:
+    desc: "Install pre-commit hooks"
+    deps: [ install ]
+    cmds:
+      - |
+        if command -v uv >/dev/null 2>&1; then
+          uv run pre-commit install
+        else
+          pre-commit install
+        fi
+
+  pre-commit:run:
+    desc: "Run pre-commit hooks on all files"
+    deps: [ install ]
+    cmds:
+      - |
+        if command -v uv >/dev/null 2>&1; then
+          uv run pre-commit run --all-files
+        else
+          pre-commit run --all-files
+        fi
+
+  # Package publication helpers
+  publish:test:
+    desc: "Publish package to TestPyPI"
+    deps: [ build ]
+    cmds:
+      - |
+        if command -v uv >/dev/null 2>&1; then
+          uv run twine upload --repository testpypi dist/*
+        else
+          twine upload --repository testpypi dist/*
+        fi
+
+  publish:prod:
+    desc: "Publish package to PyPI (production)"
+    deps: [ build ]
+    cmds:
+      - |
+        if command -v uv >/dev/null 2>&1; then
+          uv run twine upload dist/*
+        else
+          twine upload dist/*
+        fi
+
+  # Version management
+  version:show:
+    desc: "Show current version"
+    cmds:
+      - |
+        if command -v uv >/dev/null 2>&1; then
+          uv run python -c "from {{.SDK_MODULE}}.__version__ import __version__; print(__version__)"
+        else
+          python -c "from {{.SDK_MODULE}}.__version__ import __version__; print(__version__)"
+        fi
+
+  # Lock file management
+  lock:
+    desc: "Update lock file after dependency changes"
+    cmds:
+      - uv lock
+      - echo "⚠️  Don't forget to commit uv.lock with your changes!"
