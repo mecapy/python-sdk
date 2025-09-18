@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 
 from mecapy_sdk import MecaPyClient
 from mecapy_sdk.auth import KeycloakAuth
-from mecapy_sdk.config import DEFAULT_API_URL, DEFAULT_KEYCLOAK_URL
+from mecapy_sdk.config import Config
 from mecapy_sdk.exceptions import (
     AuthenticationError,
     ValidationError,
@@ -168,7 +168,7 @@ async def custom_auth_example():
     try:
         # Create custom auth configuration
         auth = KeycloakAuth(
-            keycloak_url=DEFAULT_KEYCLOAK_URL,  # Using config constant
+            keycloak_url=Config.MECAPY_AUTH_URL,  # Using config constant
             realm="mecapy",
             client_id="mecapy-api-public"
         )
@@ -176,7 +176,7 @@ async def custom_auth_example():
         # Set credentials (you could also pass them in the constructor)
         # auth.set_credentials("your-username", "your-password")
         
-        async with MecaPyClient(DEFAULT_API_URL, auth=auth) as client:
+        async with MecaPyClient(Config.MECAPY_API_URL, auth=auth) as client:
             # This will work if you have valid credentials
             print("Custom auth client created successfully")
             # user = await client.get_current_user()
@@ -208,10 +208,10 @@ async def main():
     print("\n3. Custom auth object:")
     print('   auth = KeycloakAuth(username="user", password="pass")')
     print('   client = MecaPyClient(auth=auth)')
-    print(f"\n(SDK uses production URLs by default: {DEFAULT_API_URL})")
+    print(f"\n(SDK uses production URLs by default: {Config.MECAPY_API_URL})")
     print("For on-premise, also set:")
     print("- MECAPY_API_URL=https://your-api.company.com")
-    print("- MECAPY_KEYCLOAK_URL=https://your-auth.company.com")
+    print("- MECAPY_AUTH_URL=https://your-auth.company.com")
 
 
 if __name__ == "__main__":

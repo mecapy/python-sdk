@@ -1,12 +1,16 @@
 """Configuration constants for MecaPy SDK."""
+import os
 
-# Default production URLs
-DEFAULT_API_URL = "https://api.mecapy.com"
-DEFAULT_KEYCLOAK_URL = "https://auth.mecapy.com"
 
-# Default Keycloak configuration
-DEFAULT_REALM = "mecapy"
-DEFAULT_CLIENT_ID = "mecapy-api-public"
+class Config:
+    MECAPY_API_URL: str = os.getenv("MECAPY_API_URL", "https://api.mecapy.com")
+    MECAPY_AUTH_URL: str = os.getenv("MECAPY_AUTH_URL", "https://auth.mecapy.com")
 
-# Other defaults
-DEFAULT_TIMEOUT = 30.0
+    # Default Keycloak configuration
+    DEFAULT_REALM = "mecapy"
+    DEFAULT_CLIENT_ID = "mecapy-api-public"
+
+    # Other defaults
+    DEFAULT_TIMEOUT = 30.0
+
+

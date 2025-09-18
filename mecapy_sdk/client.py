@@ -8,7 +8,7 @@ import inspect
 
 from .auth import KeycloakAuth
 from .models import UserInfo, UploadResponse, APIResponse, ProtectedResponse, AdminResponse
-from .config import DEFAULT_API_URL, DEFAULT_KEYCLOAK_URL, DEFAULT_REALM, DEFAULT_CLIENT_ID, DEFAULT_TIMEOUT
+from .config import Config
 from .__version__ import __version__
 from .exceptions import (
     MecaPyError, 
@@ -30,24 +30,24 @@ class MecaPyClient:
         username: Optional[str] = None,
         password: Optional[str] = None,
         keycloak_url: Optional[str] = None,
-        realm: str = DEFAULT_REALM,
-        client_id: str = DEFAULT_CLIENT_ID,
-        timeout: float = DEFAULT_TIMEOUT
+        realm: str = Config.DEFAULT_REALM,
+        client_id: str = Config.DEFAULT_CLIENT_ID,
+        timeout: float = Config.DEFAULT_TIMEOUT
     ):
         """
         Initialize MecaPy client.
         
         Args:
-            api_url: Base URL of the MecaPy API (defaults to DEFAULT_API_URL)
+            api_url: Base URL of the MecaPy API (defaults to Config.MECAPY_API_URL)
             auth: KeycloakAuth instance for authentication (optional if username/password provided)
             username: Username for authentication (alternative to auth parameter)
             password: Password for authentication (alternative to auth parameter)
-            keycloak_url: Keycloak server URL (defaults to DEFAULT_KEYCLOAK_URL)
-            realm: Keycloak realm (defaults to DEFAULT_REALM)
-            client_id: Keycloak client ID (defaults to DEFAULT_CLIENT_ID)
+            keycloak_url: Keycloak server URL (defaults to Config.MECAPY_AUTH_URL)
+            realm: Keycloak realm (defaults to Config.DEFAULT_REALM)
+            client_id: Keycloak client ID (defaults to Config.DEFAULT_CLIENT_ID)
             timeout: Request timeout in seconds
         """
-        self.api_url = (api_url or DEFAULT_API_URL).rstrip("/")
+        self.api_url = (api_url or Config.MECAPY_API_URL).rstrip("/")
         self.timeout = timeout
         
         # Initialize authentication
@@ -55,7 +55,7 @@ class MecaPyClient:
             self.auth = auth
         elif username and password:
             # Create auth from username/password
-            keycloak_url = keycloak_url or DEFAULT_KEYCLOAK_URL
+            keycloak_url = keycloak_url or Config.MECAPY_AUTH_URL
             self.auth = KeycloakAuth(
                 keycloak_url=keycloak_url,
                 realm=realm,
@@ -291,13 +291,13 @@ class MecaPyClient:
         Create MecaPyClient from environment variables.
         
         Expected environment variables:
-        - MECAPY_API_URL: MecaPy API base URL (optional, defaults to DEFAULT_API_URL)
-        - MECAPY_KEYCLOAK_URL: Keycloak server URL (optional, defaults to DEFAULT_KEYCLOAK_URL)
-        - MECAPY_REALM: Keycloak realm (optional, defaults to DEFAULT_REALM)
-        - MECAPY_CLIENT_ID: Keycloak client ID (optional, defaults to DEFAULT_CLIENT_ID)
+        - MECAPY_API_URL: MecaPy API base URL (optional, defaults to Config.MECAPY_API_URL)
+        - MECAPY_AUTH_URL: Keycloak server URL (optional, defaults to Config.MECAPY_AUTH_URL)
+        - MECAPY_REALM: Keycloak realm (optional, defaults to Config.DEFAULT_REALM)
+        - MECAPY_CLIENT_ID: Keycloak client ID (optional, defaults to Config.DEFAULT_CLIENT_ID)
         - MECAPY_USERNAME: Username (optional)
         - MECAPY_PASSWORD: Password (optional)
-        - MECAPY_TIMEOUT: Request timeout (optional, defaults to DEFAULT_TIMEOUT)
+        - MECAPY_TIMEOUT: Request timeout (optional, defaults to Config.DEFAULT_TIMEOUT)
         
         Returns:
             MecaPyClient instance with default production URLs
@@ -306,8 +306,8 @@ class MecaPyClient:
             api_url=os.getenv("MECAPY_API_URL"),
             username=os.getenv("MECAPY_USERNAME"),
             password=os.getenv("MECAPY_PASSWORD"),
-            keycloak_url=os.getenv("MECAPY_KEYCLOAK_URL"),
-            realm=os.getenv("MECAPY_REALM", DEFAULT_REALM),
-            client_id=os.getenv("MECAPY_CLIENT_ID", DEFAULT_CLIENT_ID),
-            timeout=float(os.getenv("MECAPY_TIMEOUT", str(DEFAULT_TIMEOUT)))
+            keycloak_url=os.getenv("MECAPY_AUTH_URL"),
+            realm=os.getenv("MECAPY_REALM", Config.DEFAULT_REALM),
+            client_id=os.getenv("MECAPY_CLIENT_ID", Config.DEFAULT_CLIENT_ID),
+            timeout=float(os.getenv("MECAPY_TIMEOUT", str(Config.DEFAULT_TIMEOUT)))
         )
