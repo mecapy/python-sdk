@@ -11,7 +11,8 @@ import authlib
 import keyring
 import requests
 from authlib.integrations.requests_client import OAuth2Session
-from config import config
+
+from .config import config
 
 
 
