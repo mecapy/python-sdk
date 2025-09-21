@@ -32,7 +32,7 @@ class MecaPyClient:
         keycloak_url: Optional[str] = None,
         realm: str = Config.DEFAULT_REALM,
         client_id: str = Config.DEFAULT_CLIENT_ID,
-        timeout: float = Config.DEFAULT_TIMEOUT
+        timeout: float = Config.timeout
     ):
         """
         Initialize MecaPy client.
@@ -47,7 +47,7 @@ class MecaPyClient:
             client_id: Keycloak client ID (defaults to Config.DEFAULT_CLIENT_ID)
             timeout: Request timeout in seconds
         """
-        self.api_url = (api_url or Config.MECAPY_API_URL).rstrip("/")
+        self.api_url = (api_url or Config.api_url).rstrip("/")
         self.timeout = timeout
         
         # Initialize authentication
@@ -55,7 +55,7 @@ class MecaPyClient:
             self.auth = auth
         elif username and password:
             # Create auth from username/password
-            keycloak_url = keycloak_url or Config.MECAPY_AUTH_URL
+            keycloak_url = keycloak_url or Config.auth_url
             self.auth = KeycloakAuth(
                 keycloak_url=keycloak_url,
                 realm=realm,
@@ -309,5 +309,5 @@ class MecaPyClient:
             keycloak_url=os.getenv("MECAPY_AUTH_URL"),
             realm=os.getenv("MECAPY_REALM", Config.DEFAULT_REALM),
             client_id=os.getenv("MECAPY_CLIENT_ID", Config.DEFAULT_CLIENT_ID),
-            timeout=float(os.getenv("MECAPY_TIMEOUT", str(Config.DEFAULT_TIMEOUT)))
+            timeout=float(os.getenv("MECAPY_TIMEOUT", str(Config.timeout)))
         )

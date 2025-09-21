@@ -1,18 +1,28 @@
 """Configuration constants for MecaPy SDK."""
-import os
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class Config:
-    # MECAPY_API_URL: str = os.getenv("MECAPY_API_URL", "https://api.mecapy.com")
-    MECAPY_API_URL: str = os.getenv("MECAPY_API_URL", "http://localhost:8000")
+class AuthConfig(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="mecapy_auth_", case_sensitive=False, extra="ignore")
+
+    url: str = "https://auth.mecapy.com"
+    issuer: str = "http://localhost:8080/realms/mecapy"
+    realm: str = "mecapy"
+    client_id: str = "mecapy-api-public"
+
+
+class Config(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="mecapy_", case_sensitive=False, extra="ignore")
+
+    api_url: str = "https://api.mecapy.com"
 
     # Default Keycloak configuration
-    MECAPY_AUTH_URL: str = os.getenv("MECAPY_AUTH_URL", "https://auth.mecapy.com")
-    MECAPY_AUTH_ISSUER = "http://localhost:8080/realms/mecapy"
-    MECAPY_AUTH_REALM = "mecapy"
-    MECAPY_AUTH_CLIENT_ID = "mecapy-api-public"
+    # Authentication configuration
+    auth: AuthConfig = AuthConfig()
 
     # Other defaults
-    DEFAULT_TIMEOUT = 30.0
+    timeout: float = 30.0
 
 
+config = Config()

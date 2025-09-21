@@ -7,10 +7,12 @@ import socket
 import urllib.parse
 import webbrowser
 
+import authlib
 import keyring
 import requests
 from authlib.integrations.requests_client import OAuth2Session
-from config import Config
+from config import config
+
 
 
 class OAuthCallbackHandler(http.server.BaseHTTPRequestHandler):
@@ -47,9 +49,9 @@ class OAuthCallbackHandler(http.server.BaseHTTPRequestHandler):
 
 class MecapySdkAuth:
     def __init__(self):
-        self.client_id = Config.MECAPY_AUTH_CLIENT_ID
-        self.realm = Config.MECAPY_AUTH_REALM
-        self.issuer = Config.MECAPY_AUTH_ISSUER
+        self.client_id = conf.auth.client_id
+        self.realm = conf.auth.realm
+        self.issuer = conf.auth.issuer
         self.scopes = ["openid", "profile", "email"]
 
         self.port = self.set_port(8085, 8086, 8087, 8088, 8089)
@@ -57,9 +59,9 @@ class MecapySdkAuth:
 
         self.auth_code = None
 
-        config = self.fetch_oidc_config()
-        self.authorization_endpoint = config["authorization_endpoint"]
-        self.token_endpoint = config["token_endpoint"]
+        oidc_conf = self.fetch_oidc_config()
+        self.authorization_endpoint = oidc_conf["authorization_endpoint"]
+        self.token_endpoint = oidc_conf["token_endpoint"]
 
     def set_port(self, *ports):
         for port in ports:
@@ -153,8 +155,12 @@ class MecapySdkAuth:
 
     def get_session(self):
         token = self.get_token()
-        return OAuth2Session(client_id=self.client_id, token_endpoint=self.token_endpoint, token=token)
-
+        session = OAuth2Session(client_id=self.client_id, token_endpoint=self.token_endpoint, token=token)
+        try:
+            session.ensure_active_token()
+        except authlib.integrations.base_client.errors.OAuthError:
+            token = self.login()
+            return OAuth2Session(client_id=self.client_id, token_endpoint=self.token_endpoint, token=token)
 
 # ----------------------------
 # Lancer l'auth
@@ -163,5 +169,5 @@ if __name__ == "__main__":
     auth = MecapySdkAuth()
     session = auth.get_session()
 
-    resp = session.get(f"{Config.MECAPY_API_URL}/auth/me")
+    resp = session.get(f"{conf.api_url}/auth/me")
     print(resp.json())
