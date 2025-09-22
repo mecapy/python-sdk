@@ -7,9 +7,13 @@ class AuthConfig(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="mecapy_auth_", case_sensitive=False, extra="ignore")
 
     url: str = "https://auth.mecapy.com"
-    issuer: str = "http://localhost:8080/realms/mecapy"
     realm: str = "mecapy"
     client_id: str = "mecapy-api-public"
+
+    @property
+    def issuer(self) -> str:
+        """Build issuer URL from base URL and realm."""
+        return f"{self.url}/realms/{self.realm}"
 
 
 class Config(BaseSettings):

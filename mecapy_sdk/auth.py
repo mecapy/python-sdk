@@ -12,7 +12,7 @@ import keyring
 import requests
 from authlib.integrations.requests_client import OAuth2Session
 
-from .config import config
+from config import config as conf
 
 
 
@@ -159,6 +159,7 @@ class MecapySdkAuth:
         session = OAuth2Session(client_id=self.client_id, token_endpoint=self.token_endpoint, token=token)
         try:
             session.ensure_active_token()
+            return session
         except authlib.integrations.base_client.errors.OAuthError:
             token = self.login()
             return OAuth2Session(client_id=self.client_id, token_endpoint=self.token_endpoint, token=token)

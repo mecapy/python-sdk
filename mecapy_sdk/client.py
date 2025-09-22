@@ -6,9 +6,9 @@ from pathlib import Path
 import httpx
 import inspect
 
-from .auth import KeycloakAuth
+from .auth import MecapySdkAuth
 from .models import UserInfo, UploadResponse, APIResponse, ProtectedResponse, AdminResponse
-from .config import Config
+from .config import config
 from .__version__ import __version__
 from .exceptions import (
     MecaPyError, 
@@ -26,20 +26,20 @@ class MecaPyClient:
     def __init__(
         self,
         api_url: Optional[str] = None,
-        auth: Optional[KeycloakAuth] = None,
+        auth: Optional[MecapySdkAuth] = None,
         username: Optional[str] = None,
         password: Optional[str] = None,
         keycloak_url: Optional[str] = None,
-        realm: str = Config.DEFAULT_REALM,
-        client_id: str = Config.DEFAULT_CLIENT_ID,
-        timeout: float = Config.timeout
+        realm: str = config.auth.realm,
+        client_id: str = config.auth.client_id,
+        timeout: float = config.timeout
     ):
         """
         Initialize MecaPy client.
         
         Args:
             api_url: Base URL of the MecaPy API (defaults to Config.MECAPY_API_URL)
-            auth: KeycloakAuth instance for authentication (optional if username/password provided)
+            auth: MecapySdkAuth instance for authentication (optional if username/password provided)
             username: Username for authentication (alternative to auth parameter)
             password: Password for authentication (alternative to auth parameter)
             keycloak_url: Keycloak server URL (defaults to Config.MECAPY_AUTH_URL)
@@ -56,7 +56,7 @@ class MecaPyClient:
         elif username and password:
             # Create auth from username/password
             keycloak_url = keycloak_url or Config.auth_url
-            self.auth = KeycloakAuth(
+            self.auth = MecapySdkAuth(
                 keycloak_url=keycloak_url,
                 realm=realm,
                 client_id=client_id,
