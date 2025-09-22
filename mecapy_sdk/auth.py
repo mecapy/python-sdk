@@ -101,7 +101,8 @@ class MecapySdkAuth:
             Raised if there is an issue with the HTTP GET request or the response, such
             as a connection error, timeout, or invalid response status.
         """
-        resp = requests.get(f"{self.issuer}/.well-known/openid-configuration")
+        discovery_url = conf.auth.get_oidc_discovery_url()
+        resp = requests.get(discovery_url)
         resp.raise_for_status()
         return resp.json()
 
