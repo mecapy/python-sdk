@@ -5,17 +5,17 @@ from unittest.mock import AsyncMock, patch
 from datetime import datetime, timedelta
 import httpx
 
-from mecapy_sdk.auth import KeycloakAuth
+from mecapy_sdk.auth import MecapySdkAuth
 from mecapy_sdk.exceptions import AuthenticationError, NetworkError
 
 
 @pytest.mark.unit
-class TestKeycloakAuth:
-    """Test KeycloakAuth class."""
+class TestMecapySdkAuth:
+    """Test MecapySdkAuth class."""
     
     def test_init(self):
-        """Test KeycloakAuth initialization."""
-        auth = KeycloakAuth(
+        """Test MecapySdkAuth initialization."""
+        auth = MecapySdkAuth(
             keycloak_url="https://auth.example.com",
             realm="test-realm",
             client_id="test-client",
@@ -32,7 +32,7 @@ class TestKeycloakAuth:
     
     def test_init_strips_trailing_slash(self):
         """Test that trailing slash is stripped from Keycloak URL."""
-        auth = KeycloakAuth(
+        auth = MecapySdkAuth(
             keycloak_url="https://auth.example.com/",
             realm="test"
         )
@@ -40,7 +40,7 @@ class TestKeycloakAuth:
     
     def test_set_credentials(self):
         """Test setting credentials."""
-        auth = KeycloakAuth("https://auth.example.com")
+        auth = MecapySdkAuth("https://auth.example.com")
         auth._access_token = "old_token"
         auth._token_expires_at = datetime.now() + timedelta(hours=1)
         
@@ -53,12 +53,12 @@ class TestKeycloakAuth:
     
     def test_is_token_valid_no_token(self):
         """Test token validation when no token exists."""
-        auth = KeycloakAuth("https://auth.example.com")
+        auth = MecapySdkAuth("https://auth.example.com")
         assert not auth._is_token_valid()
     
     def test_is_token_valid_expired_token(self):
         """Test token validation with expired token."""
-        auth = KeycloakAuth("https://auth.example.com")
+        auth = MecapySdkAuth("https://auth.example.com")
         auth._access_token = "token"
         auth._token_expires_at = datetime.now() - timedelta(minutes=1)
         
@@ -66,7 +66,7 @@ class TestKeycloakAuth:
     
     def test_is_token_valid_valid_token(self):
         """Test token validation with valid token."""
-        auth = KeycloakAuth("https://auth.example.com")
+        auth = MecapySdkAuth("https://auth.example.com")
         auth._access_token = "token"
         auth._token_expires_at = datetime.now() + timedelta(hours=1)
         
@@ -75,7 +75,7 @@ class TestKeycloakAuth:
     @pytest.mark.asyncio
     async def test_get_new_token_no_credentials(self):
         """Test getting new token without credentials."""
-        auth = KeycloakAuth("https://auth.example.com")
+        auth = MecapySdkAuth("https://auth.example.com")
         
         with pytest.raises(AuthenticationError, match="Username and password are required"):
             await auth._get_new_token()
@@ -83,7 +83,7 @@ class TestKeycloakAuth:
     @pytest.mark.asyncio
     async def test_get_new_token_success(self):
         """Test successful token retrieval."""
-        auth = KeycloakAuth(
+        auth = MecapySdkAuth(
             "https://auth.example.com",
             username="testuser",
             password="testpass"
@@ -111,7 +111,7 @@ class TestKeycloakAuth:
     @pytest.mark.asyncio
     async def test_get_new_token_invalid_credentials(self):
         """Test token retrieval with invalid credentials."""
-        auth = KeycloakAuth(
+        auth = MecapySdkAuth(
             "https://auth.example.com",
             username="baduser",
             password="badpass"
@@ -129,7 +129,7 @@ class TestKeycloakAuth:
     @pytest.mark.asyncio
     async def test_get_new_token_network_error(self):
         """Test token retrieval with network error."""
-        auth = KeycloakAuth(
+        auth = MecapySdkAuth(
             "https://auth.example.com",
             username="testuser",
             password="testpass"
@@ -146,7 +146,7 @@ class TestKeycloakAuth:
     @pytest.mark.asyncio
     async def test_get_access_token_valid_token(self):
         """Test getting access token when current token is valid."""
-        auth = KeycloakAuth("https://auth.example.com")
+        auth = MecapySdkAuth("https://auth.example.com")
         auth._access_token = "valid_token"
         auth._token_expires_at = datetime.now() + timedelta(hours=1)
         
@@ -155,7 +155,7 @@ class TestKeycloakAuth:
     
     def test_logout(self):
         """Test logout functionality."""
-        auth = KeycloakAuth("https://auth.example.com")
+        auth = MecapySdkAuth("https://auth.example.com")
         auth._access_token = "token"
         auth._refresh_token = "refresh"
         auth._token_expires_at = datetime.now()
@@ -169,7 +169,7 @@ class TestKeycloakAuth:
     def test_from_env_default_url(self):
         """Test from_env with default MECAPY_KEYCLOAK_URL."""
         with patch.dict("os.environ", {}, clear=True):
-            auth = KeycloakAuth.from_env()
+            auth = MecapySdkAuth.from_env()
             assert auth.keycloak_url == "https://auth.mecapy.com"
     
     def test_from_env_success(self):
@@ -183,7 +183,7 @@ class TestKeycloakAuth:
         }
         
         with patch.dict("os.environ", env_vars):
-            auth = KeycloakAuth.from_env()
+            auth = MecapySdkAuth.from_env()
             
             assert auth.keycloak_url == "https://auth.example.com"
             assert auth.realm == "custom-realm"
@@ -194,7 +194,7 @@ class TestKeycloakAuth:
     @pytest.mark.asyncio
     async def test_get_access_token_with_refresh(self):
         """Test get_access_token when refresh token is available."""
-        auth = KeycloakAuth("https://auth.example.com", realm="test", client_id="test")
+        auth = MecapySdkAuth("https://auth.example.com", realm="test", client_id="test")
         auth._access_token = None  # No current token
         auth._refresh_token = "refresh_token"
         
@@ -210,7 +210,7 @@ class TestKeycloakAuth:
     @pytest.mark.asyncio
     async def test_get_access_token_refresh_fails_fallback_to_new_token(self):
         """Test get_access_token when refresh fails and falls back to new token."""
-        auth = KeycloakAuth("https://auth.example.com", realm="test", client_id="test")
+        auth = MecapySdkAuth("https://auth.example.com", realm="test", client_id="test")
         auth._access_token = None
         auth._refresh_token = "invalid_refresh"
         
@@ -228,7 +228,7 @@ class TestKeycloakAuth:
     @pytest.mark.asyncio
     async def test_get_new_token_non_200_status(self):
         """Test _get_new_token with non-200 status code."""
-        auth = KeycloakAuth("https://auth.example.com", realm="test", client_id="test")
+        auth = MecapySdkAuth("https://auth.example.com", realm="test", client_id="test")
         auth.set_credentials("user", "pass")
         
         mock_response = AsyncMock()
@@ -242,7 +242,7 @@ class TestKeycloakAuth:
     @pytest.mark.asyncio
     async def test_refresh_access_token_no_refresh_token(self):
         """Test _refresh_access_token when no refresh token is available."""
-        auth = KeycloakAuth("https://auth.example.com", realm="test", client_id="test")
+        auth = MecapySdkAuth("https://auth.example.com", realm="test", client_id="test")
         auth._refresh_token = None
         
         with pytest.raises(AuthenticationError, match="No refresh token available"):
@@ -251,7 +251,7 @@ class TestKeycloakAuth:
     @pytest.mark.asyncio
     async def test_refresh_access_token_401_error(self):
         """Test _refresh_access_token with 401 error."""
-        auth = KeycloakAuth("https://auth.example.com", realm="test", client_id="test")
+        auth = MecapySdkAuth("https://auth.example.com", realm="test", client_id="test")
         auth._refresh_token = "expired_refresh"
         
         mock_response = AsyncMock()
@@ -264,7 +264,7 @@ class TestKeycloakAuth:
     @pytest.mark.asyncio
     async def test_refresh_access_token_non_200_status(self):
         """Test _refresh_access_token with non-200 status code."""
-        auth = KeycloakAuth("https://auth.example.com", realm="test", client_id="test")
+        auth = MecapySdkAuth("https://auth.example.com", realm="test", client_id="test")
         auth._refresh_token = "valid_refresh"
         
         mock_response = AsyncMock()
@@ -278,7 +278,7 @@ class TestKeycloakAuth:
     @pytest.mark.asyncio
     async def test_refresh_access_token_network_error(self):
         """Test _refresh_access_token with network error."""
-        auth = KeycloakAuth("https://auth.example.com", realm="test", client_id="test")
+        auth = MecapySdkAuth("https://auth.example.com", realm="test", client_id="test")
         auth._refresh_token = "valid_refresh"
         
         with patch("httpx.AsyncClient.post", side_effect=httpx.RequestError("Network error")):

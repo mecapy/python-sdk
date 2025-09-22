@@ -12,7 +12,7 @@ import keyring
 import requests
 from authlib.integrations.requests_client import OAuth2Session
 
-from config import config as conf
+from .config import config as conf
 
 
 
@@ -165,12 +165,18 @@ class MecapySdkAuth:
             token = self.login()
             return OAuth2Session(client_id=self.client_id, token_endpoint=self.token_endpoint, token=token)
 
-# ----------------------------
-# Lancer l'auth
-# ----------------------------
-if __name__ == "__main__":
-    auth = MecapySdkAuth()
-    session = auth.get_session()
+    async def get_access_token(self) -> str:
+        """
+        Get access token for compatibility with existing client code.
 
-    resp = session.get(f"{conf.api_url}/auth/me")
-    print(resp.json())
+        Returns
+        -------
+        str
+            The access token string
+        """
+        token_data = self.get_token()
+        access_token = token_data.get("access_token")
+        if not access_token:
+            raise Exception("No access token found in token response")
+        return access_token
+

@@ -29,40 +29,29 @@ class MecaPyClient:
         auth: Optional[MecapySdkAuth] = None,
         username: Optional[str] = None,
         password: Optional[str] = None,
-        keycloak_url: Optional[str] = None,
-        realm: str = config.auth.realm,
-        client_id: str = config.auth.client_id,
         timeout: float = config.timeout
     ):
         """
         Initialize MecaPy client.
-        
+
         Args:
-            api_url: Base URL of the MecaPy API (defaults to Config.MECAPY_API_URL)
+            api_url: Base URL of the MecaPy API (defaults to config.api_url)
             auth: MecapySdkAuth instance for authentication (optional if username/password provided)
             username: Username for authentication (alternative to auth parameter)
             password: Password for authentication (alternative to auth parameter)
-            keycloak_url: Keycloak server URL (defaults to Config.MECAPY_AUTH_URL)
-            realm: Keycloak realm (defaults to Config.DEFAULT_REALM)
-            client_id: Keycloak client ID (defaults to Config.DEFAULT_CLIENT_ID)
             timeout: Request timeout in seconds
         """
-        self.api_url = (api_url or Config.api_url).rstrip("/")
+        self.api_url = (api_url or config.api_url).rstrip("/")
         self.timeout = timeout
-        
+
         # Initialize authentication
         if auth is not None:
             self.auth = auth
         elif username and password:
-            # Create auth from username/password
-            keycloak_url = keycloak_url or Config.auth_url
-            self.auth = MecapySdkAuth(
-                keycloak_url=keycloak_url,
-                realm=realm,
-                client_id=client_id,
-                username=username,
-                password=password
-            )
+            # Create auth instance - it will use global config for OIDC settings
+            self.auth = MecapySdkAuth()
+            # Note: MecapySdkAuth uses OAuth2 + PKCE flow, not username/password directly
+            # This is for backward compatibility, but users should use the web flow
         else:
             self.auth = None
         
@@ -303,11 +292,8 @@ class MecaPyClient:
             MecaPyClient instance with default production URLs
         """
         return cls(
-            api_url=os.getenv("MECAPY_API_URL"),
+            api_url=os.getenv("MECAPY_API_URL", config.api_url),
             username=os.getenv("MECAPY_USERNAME"),
             password=os.getenv("MECAPY_PASSWORD"),
-            keycloak_url=os.getenv("MECAPY_AUTH_URL"),
-            realm=os.getenv("MECAPY_REALM", Config.DEFAULT_REALM),
-            client_id=os.getenv("MECAPY_CLIENT_ID", Config.DEFAULT_CLIENT_ID),
-            timeout=float(os.getenv("MECAPY_TIMEOUT", str(Config.timeout)))
+            timeout=float(os.getenv("MECAPY_TIMEOUT", str(config.timeout)))
         )

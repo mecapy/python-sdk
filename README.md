@@ -152,7 +152,7 @@ asyncio.run(main())
 - `get_root() -> APIResponse` - Get API information
 - `health_check() -> Dict[str, str]` - Check API health
 
-### KeycloakAuth
+### MecapySdkAuth
 
 #### Methods
 
@@ -162,7 +162,7 @@ asyncio.run(main())
 
 #### Class Methods
 
-- `from_env() -> KeycloakAuth` - Create instance from environment variables
+- `from_env() -> MecapySdkAuth` - Create instance from environment variables
 
 ## Error Handling
 
@@ -277,11 +277,11 @@ asyncio.run(user_info())
 ```python
 import asyncio
 from mecapy_sdk import MecaPyClient
-from mecapy_sdk.auth import KeycloakAuth
+from mecapy_sdk.auth import MecapySdkAuth
 
 async def custom_auth():
     # Create auth with custom settings
-    auth = KeycloakAuth(
+    auth = MecapySdkAuth(
         keycloak_url="https://custom-auth.example.com",
         realm="custom-realm",
         client_id="custom-client"

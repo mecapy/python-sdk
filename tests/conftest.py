@@ -3,14 +3,15 @@
 import pytest
 from unittest.mock import AsyncMock
 from mecapy_sdk import MecaPyClient
-from mecapy_sdk.auth import KeycloakAuth
+from mecapy_sdk.auth import MecapySdkAuth
 
 
 @pytest.fixture
 def mock_auth():
-    """Mock KeycloakAuth instance."""
-    auth = AsyncMock(spec=KeycloakAuth)
-    auth.get_access_token.return_value = "mock_token"
+    """Mock MecapySdkAuth instance."""
+    auth = AsyncMock(spec=MecapySdkAuth)
+    auth.get_token.return_value = {"access_token": "mock_token"}
+    auth.get_session.return_value = AsyncMock()
     return auth
 
 

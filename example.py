@@ -14,7 +14,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from mecapy_sdk import MecaPyClient
-from mecapy_sdk.auth import KeycloakAuth
+from mecapy_sdk.auth import MecapySdkAuth
 from mecapy_sdk.config import Config
 from mecapy_sdk.exceptions import (
     AuthenticationError,
@@ -125,7 +125,7 @@ async def error_handling_example():
     
     try:
         # Create client with invalid URL to demonstrate error handling
-        auth = KeycloakAuth(
+        auth = MecapySdkAuth(
             keycloak_url="https://invalid-auth-server.example.com",
             username="invalid-user",
             password="invalid-pass"
@@ -167,7 +167,7 @@ async def custom_auth_example():
     
     try:
         # Create custom auth configuration
-        auth = KeycloakAuth(
+        auth = MecapySdkAuth(
             keycloak_url=Config.MECAPY_AUTH_URL,  # Using config constant
             realm="mecapy",
             client_id="mecapy-api-public"
@@ -206,7 +206,7 @@ async def main():
     print("\n2. Direct parameters:")
     print('   client = MecaPyClient(username="user", password="pass")')
     print("\n3. Custom auth object:")
-    print('   auth = KeycloakAuth(username="user", password="pass")')
+    print('   auth = MecapySdkAuth(username="user", password="pass")')
     print('   client = MecaPyClient(auth=auth)')
     print(f"\n(SDK uses production URLs by default: {Config.MECAPY_API_URL})")
     print("For on-premise, also set:")
