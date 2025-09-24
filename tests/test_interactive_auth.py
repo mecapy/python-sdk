@@ -34,6 +34,7 @@ def test_interactive_authentication():
     try:
         print("1. Initializing authentication...")
         auth = MecapySdkAuth()
+        auth.logout()
 
         print("2. Getting session (will trigger browser authentication if needed)...")
         session = auth.get_session()
