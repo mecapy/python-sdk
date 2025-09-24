@@ -74,7 +74,7 @@ class OAuthCallbackHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(b"<h1>Error: code not found</h1>")
 
 
-class MecapySdkAuth:
+class MecapyAuth:
     """
     Handles authentication and token management for the MecaPy SDK.
 
@@ -177,9 +177,9 @@ class MecapySdkAuth:
             True if the port is available (free), False if it is currently in use.
         """
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.settimeout(MecapySdkAuth.SOCKET_TIMEOUT)
+            s.settimeout(MecapyAuth.SOCKET_TIMEOUT)
             try:
-                s.bind((MecapySdkAuth.LOCALHOST, port))
+                s.bind((MecapyAuth.LOCALHOST, port))
             except OSError:
                 return False
             else:

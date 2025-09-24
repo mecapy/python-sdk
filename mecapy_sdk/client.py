@@ -6,7 +6,7 @@ from pathlib import Path
 import httpx
 import inspect
 
-from .auth import MecapySdkAuth
+from .auth import MecapyAuth
 from .models import UserInfo, UploadResponse, APIResponse, ProtectedResponse, AdminResponse
 from .config import config
 from .__version__ import __version__
@@ -26,7 +26,7 @@ class MecaPyClient:
     def __init__(
         self,
         api_url: Optional[str] = None,
-        auth: Optional[MecapySdkAuth] = None,
+        auth: Optional[MecapyAuth] = None,
         username: Optional[str] = None,
         password: Optional[str] = None,
         timeout: float = config.timeout
@@ -36,7 +36,7 @@ class MecaPyClient:
 
         Args:
             api_url: Base URL of the MecaPy API (defaults to config.api_url)
-            auth: MecapySdkAuth instance for authentication (optional if username/password provided)
+            auth: MecapyAuth instance for authentication (optional if username/password provided)
             username: Username for authentication (alternative to auth parameter)
             password: Password for authentication (alternative to auth parameter)
             timeout: Request timeout in seconds
@@ -49,8 +49,8 @@ class MecaPyClient:
             self.auth = auth
         elif username and password:
             # Create auth instance - it will use global config for OIDC settings
-            self.auth = MecapySdkAuth()
-            # Note: MecapySdkAuth uses OAuth2 + PKCE flow, not username/password directly
+            self.auth = MecapyAuth()
+            # Note: MecapyAuth uses OAuth2 + PKCE flow, not username/password directly
             # This is for backward compatibility, but users should use the web flow
         else:
             self.auth = None

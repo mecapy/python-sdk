@@ -20,7 +20,7 @@ from pathlib import Path
 # Add the package to path for direct script execution
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from mecapy_sdk.auth import MecapySdkAuth
+from mecapy_sdk.auth import MecapyAuth
 from mecapy_sdk.config import config as conf
 
 
@@ -33,7 +33,7 @@ def test_interactive_authentication():
 
     try:
         print("1. Initializing authentication...")
-        auth = MecapySdkAuth()
+        auth = MecapyAuth()
         auth.logout()
 
         print("2. Getting session (will trigger browser authentication if needed)...")
