@@ -45,8 +45,6 @@ uv run mypy mecapy_sdk
 # Build package
 uv build
 
-# Test locally with example
-uv run python example.py
 ```
 
 ## Key Configuration Files
