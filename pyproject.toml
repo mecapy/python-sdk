@@ -105,18 +105,20 @@ directory = "coverage_html"
 # =============================================================================
 #                                   Ruff
 # =============================================================================
+[tool.ruff]
 line-length = 120
 indent-width = 4
 target-version = "py313"
+exclude = ["tests", ".venv"]
 
-[format]
+[tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
 skip-magic-trailing-comma = false
 line-ending = "lf"
 docstring-code-format = true
 
-[lint]
+[tool.ruff.lint]
 select = [
     "E", # Erreurs
     "W", # Warnings (avertissements)
@@ -136,10 +138,10 @@ select = [
     "PD", # Panda
 ]
 
-[lint.pydocstyle]
+[tool.ruff.lint.pydocstyle]
 convention = "numpy"
 
-[lint.mccabe]
+[tool.ruff.lint.mccabe]
 max-complexity = 5
 
 # =============================================================================
