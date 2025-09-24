@@ -6,13 +6,38 @@ import secrets
 import socket
 import urllib.parse
 import webbrowser
+from typing import Any
 
-import authlib
 import keyring
-import requests
-from authlib.integrations.requests_client import OAuth2Session
+import requests  # type: ignore[import-untyped]
+from authlib.integrations.requests_client import OAuth2Session  # type: ignore[import-untyped]
 
 from .config import config as conf
+
+
+class AuthenticationError(Exception):
+    """Base exception for authentication errors."""
+
+
+class NoFreePortError(AuthenticationError):
+    """Raised when no free port is found in the provided list."""
+
+    def __init__(self, ports: tuple[int, ...]) -> None:
+        super().__init__(f"No free port found among {ports}")
+
+
+class NoAuthCodeError(AuthenticationError):
+    """Raised when no authorization code is received from OAuth provider."""
+
+    def __init__(self) -> None:
+        super().__init__("No authorization code received from OAuth provider")
+
+
+class NoAccessTokenError(AuthenticationError):
+    """Raised when no access token is found in token response."""
+
+    def __init__(self) -> None:
+        super().__init__("No access token found in token response")
 
 
 class OAuthCallbackHandler(http.server.BaseHTTPRequestHandler):
@@ -33,12 +58,13 @@ class OAuthCallbackHandler(http.server.BaseHTTPRequestHandler):
         attribute is used to store the authorization code when received.
     """
 
-    def do_GET(self):
+    def do_GET(self) -> None:
         """Handle HTTP GET requests to extract a query parameter `code` from the URL path."""
         params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
         code = params.get("code")
         if code:
-            self.server.auth_code = code[0]
+            # Store auth code in server instance (dynamically added attribute)
+            self.server.auth_code = str(code[0])  # type: ignore[attr-defined]
             self.send_response(200)
             self.end_headers()
             self.wfile.write(b"<h1>Authentication successful!</h1><p>You can close this window.</p>")
@@ -81,8 +107,8 @@ class MecapySdkAuth:
     """
 
     # Constants
-    DEFAULT_PORTS: tuple[int] = (8085, 8086, 8087, 8088, 8089)
-    DEFAULT_SCOPES: tuple[str] = ["openid", "profile", "email"]
+    DEFAULT_PORTS: tuple[int, ...] = (8085, 8086, 8087, 8088, 8089)
+    DEFAULT_SCOPES: tuple[str, ...] = ("openid", "profile", "email")
     KEYRING_SERVICE: str = "MecaPy"
     KEYRING_TOKEN_KEY: str = "token"
     LOCALHOST: str = "127.0.0.1"
@@ -90,11 +116,11 @@ class MecapySdkAuth:
     CODE_VERIFIER_LENGTH: int = 48
     CODE_CHALLENGE_METHOD: str = "S256"
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.client_id = conf.auth.client_id
         self.realm = conf.auth.realm
         self.issuer = conf.auth.issuer
-        self.scopes = self.DEFAULT_SCOPES.copy()
+        self.scopes = list(self.DEFAULT_SCOPES)
         self.port = self.set_port(*self.DEFAULT_PORTS)
         self.redirect_uri = f"http://localhost:{self.port}/callback"
         self.auth_code = None
@@ -129,7 +155,7 @@ class MecapySdkAuth:
         for port in ports:
             if self.is_port_free(port):
                 return port
-        raise RuntimeError(f"No free port found among {ports}")
+        raise NoFreePortError(ports)
 
     @staticmethod
     def is_port_free(port: int) -> bool:
@@ -159,7 +185,7 @@ class MecapySdkAuth:
             else:
                 return True
 
-    def fetch_oidc_config(self) -> dict[str, str]:
+    def fetch_oidc_config(self) -> dict[str, Any]:
         """
         Fetch the OpenID Connect (OIDC) configuration for a given issuer.
 
@@ -210,9 +236,9 @@ class MecapySdkAuth:
             auth_code = getattr(server, "auth_code", None)
         if auth_code:
             return auth_code
-        raise RuntimeError("No authorization code received from OAuth provider")
+        raise NoAuthCodeError()
 
-    def _create_oauth_client(self, token: dict | None = None) -> OAuth2Session:
+    def _create_oauth_client(self, token: dict[str, Any] | None = None) -> OAuth2Session:
         """
         Create an OAuth2Session client with common configuration.
 
@@ -234,7 +260,7 @@ class MecapySdkAuth:
             token=token,
         )
 
-    def _store_token(self, token: dict) -> None:
+    def _store_token(self, token: dict[str, Any]) -> None:
         """
         Store token in keyring.
 
@@ -245,7 +271,7 @@ class MecapySdkAuth:
         """
         keyring.set_password(self.KEYRING_SERVICE, self.KEYRING_TOKEN_KEY, json.dumps(token))
 
-    def _retrieve_stored_token(self) -> dict | None:
+    def _retrieve_stored_token(self) -> dict[str, Any] | None:
         """
         Retrieve token from keyring.
 
@@ -261,7 +287,7 @@ class MecapySdkAuth:
         """Clear token from keyring."""
         keyring.delete_password(self.KEYRING_SERVICE, self.KEYRING_TOKEN_KEY)
 
-    def login(self) -> dict:
+    def login(self) -> dict[str, Any]:
         """
         Login user through OAuth2 flow with Authorization Code + PKCE.
 
@@ -285,21 +311,22 @@ class MecapySdkAuth:
         auth_code = self.waiting_for_code()
 
         # Échange code contre token
-        token = client.fetch_token(self.token_endpoint, code=auth_code, code_verifier=code_verifier)
+        token_data = client.fetch_token(self.token_endpoint, code=auth_code, code_verifier=code_verifier)
 
         # Sauvegarde dans keyring
-        self._store_token(token)
+        self._store_token(token_data)
 
-        return token
+        return token_data
 
-    def logout(self):
+    def logout(self) -> None:
         """Log the user out by revoking their access and refresh tokens and clearing stored tokens."""
         client = self.get_session()
-        for tth in ["access_token", "refresh_token"]:
-            client.revoke_token(self.token_endpoint, token=client.token[tth], token_type_hint=tth)
+        for tth in ("access_token", "refresh_token"):
+            if tth in client.token:
+                client.revoke_token(self.token_endpoint, token=client.token[tth], token_type_hint=tth)
         self._clear_stored_token()
 
-    def get_token(self) -> dict:
+    def get_token(self) -> dict[str, Any]:
         """
         Retrieve a stored token or generates a new one if none exists.
 
@@ -334,7 +361,7 @@ class MecapySdkAuth:
         session = self._create_oauth_client(token=token)
         try:
             session.ensure_active_token()
-        except authlib.integrations.base_client.errors.OAuthError:
+        except Exception:  # Catch broad exception for OAuth errors
             token = self.login()
             return self._create_oauth_client(token=token)
         else:
@@ -357,5 +384,5 @@ class MecapySdkAuth:
         token_data = self.get_token()
         access_token = token_data.get("access_token")
         if not access_token:
-            raise ValueError("No access token found in token response")
-        return access_token
+            raise NoAccessTokenError()
+        return str(access_token)

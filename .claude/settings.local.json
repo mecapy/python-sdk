@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(pytest:*)", "Read"
+      "Bash(pytest:*)",
+      "Read",
+      "Bash(uv run ruff:*)",
+      "Bash(uv run:*)"
     ],
     "deny": []
   }
