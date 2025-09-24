@@ -4,7 +4,7 @@ version: '3'
 # Provides common developer workflows for this Python SDK project.
 
 vars:
-  SDK_MODULE: mecapy_sdk
+  SDK_MODULE: mecapy
 
 # Load environment from local files when present
 dotenv: [ ".env.local", ".env" ]

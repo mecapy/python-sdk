@@ -67,7 +67,7 @@ python tests/test_interactive_auth.py --clear
 
 ## Troubleshooting
 
-### Error: "No module named 'mecapy_sdk'"
+### Error: "No module named 'mecapy'"
 Make sure you're running from the SDK root directory:
 ```bash
 cd repos/python-sdk

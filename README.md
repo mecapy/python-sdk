@@ -33,7 +33,7 @@ pip install mecapy-sdk
 
 ```python
 import asyncio
-from mecapy_sdk import MecaPyClient
+from mecapy import MecaPyClient
 
 async def main():
     # Simple usage with default production URLs
@@ -54,7 +54,7 @@ asyncio.run(main())
 
 ```python
 import asyncio
-from mecapy_sdk import MecaPyClient
+from mecapy import MecaPyClient
 
 # Set environment variables (only credentials required):
 # MECAPY_USERNAME=your-username
@@ -119,7 +119,7 @@ Then load it:
 ```python
 import asyncio
 from dotenv import load_dotenv
-from mecapy_sdk import MecaPyClient
+from mecapy import MecaPyClient
 
 load_dotenv()
 
@@ -169,8 +169,8 @@ asyncio.run(main())
 The SDK provides specific exception types for different error scenarios:
 
 ```python
-from mecapy_sdk import MecaPyClient
-from mecapy_sdk.exceptions import (
+from mecapy import MecaPyClient
+from mecapy.exceptions import (
     AuthenticationError,
     ValidationError,
     NotFoundError,
@@ -227,7 +227,7 @@ class UploadResponse(BaseModel):
 ```python
 import asyncio
 from pathlib import Path
-from mecapy_sdk import MecaPyClient
+from mecapy import MecaPyClient
 
 async def upload_file():
     async with MecaPyClient.from_env() as client:
@@ -252,7 +252,7 @@ asyncio.run(upload_file())
 
 ```python
 import asyncio
-from mecapy_sdk import MecaPyClient
+from mecapy import MecaPyClient
 
 async def user_info():
     async with MecaPyClient.from_env() as client:
@@ -276,8 +276,8 @@ asyncio.run(user_info())
 
 ```python
 import asyncio
-from mecapy_sdk import MecaPyClient
-from mecapy_sdk.auth import MecapyAuth
+from mecapy import MecaPyClient
+from mecapy.auth import MecapyAuth
 
 
 async def custom_auth():
@@ -316,7 +316,7 @@ pip install -e ".[dev]"
 pytest
 
 # Run with coverage
-pytest --cov=mecapy_sdk
+pytest --cov=mecapy
 
 # Run specific test types
 pytest -m unit
@@ -333,7 +333,7 @@ ruff format
 ruff check
 
 # Type checking
-mypy mecapy_sdk
+mypy mecapy
 ```
 
 ## License

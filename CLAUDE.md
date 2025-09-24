@@ -25,7 +25,6 @@ git commit -m "Update lockfile: [describe changes]"
 - Automated via GitHub Actions on main branch pushes
 - Uses `twine` for publication
 - Requires PYPI_API_TOKEN secret in GitHub
-- Version managed via `mecapy_sdk/__version__.py`
 
 ### 3. Development Commands
 ```bash
@@ -33,14 +32,14 @@ git commit -m "Update lockfile: [describe changes]"
 uv sync --extra dev
 
 # Run tests with coverage
-uv run pytest --cov=mecapy_sdk --cov-report=xml --cov-report=html
+uv run pytest --cov=mecapy --cov-report=xml --cov-report=html
 
 # Lint (currently disabled in CI)
 uv run ruff check .
 uv run ruff format .
 
 # Type check (currently disabled in CI)
-uv run mypy mecapy_sdk
+uv run mypy mecapy
 
 # Build package
 uv build
@@ -50,7 +49,7 @@ uv build
 ## Key Configuration Files
 - `pyproject.toml` - Dependencies, metadata, and build config
 - `sonar-project.properties` - SonarCloud settings (project: mecapy_python-sdk)
-- `mecapy_sdk/__version__.py` - Single source of truth for version
+- `mecapy/__version__.py` - Single source of truth for version
 - `.github/workflows/ci.yml` - CI/CD and PyPI publication
 
 ## Testing Strategy
@@ -67,7 +66,7 @@ uv build
 4. **SonarCloud**: Badge tokens need to be updated in README
 
 ## Version Management
-- Version defined in `mecapy_sdk/__version__.py`
+- Version defined in `mecapy/__version__.py`
 - Automatically extracted by hatch for PyPI
 - Follow semantic versioning (MAJOR.MINOR.PATCH)
 - Update version before major releases

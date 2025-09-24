@@ -6,9 +6,9 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 
-from mecapy_sdk import MecaPyClient
-from mecapy_sdk.exceptions import AuthenticationError, NetworkError, NotFoundError, ServerError, ValidationError
-from mecapy_sdk.models import APIResponse, UploadResponse, UserInfo
+from mecapy import MecaPyClient
+from mecapy.exceptions import AuthenticationError, NetworkError, NotFoundError, ServerError, ValidationError
+from mecapy.models import APIResponse, UploadResponse, UserInfo
 
 
 @pytest.mark.unit

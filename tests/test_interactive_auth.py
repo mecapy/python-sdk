@@ -20,8 +20,8 @@ from pathlib import Path
 # Add the package to path for direct script execution
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from mecapy_sdk.auth import MecapyAuth
-from mecapy_sdk.config import config as conf
+from mecapy.auth import MecapyAuth
+from mecapy.config import config as conf
 
 
 def test_interactive_authentication():
@@ -70,6 +70,7 @@ def clear_stored_token():
     """Clear any stored authentication token."""
     try:
         import keyring
+
         keyring.delete_password("MecaPy", "token")
         print("✅ Stored token cleared")
     except Exception as e:

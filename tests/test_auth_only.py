@@ -15,8 +15,8 @@ from pathlib import Path
 # Add the package to path for direct script execution
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from mecapy_sdk.auth import MecapyAuth
-from mecapy_sdk.config import config as conf
+from mecapy.auth import MecapyAuth
+from mecapy.config import config as conf
 
 
 def test_auth_only():
@@ -39,7 +39,7 @@ def test_auth_only():
         print(f"Scopes: {token_data.get('scope', 'Unknown')}")
 
         # Test access token extraction
-        access_token = token_data.get('access_token', '')
+        access_token = token_data.get("access_token", "")
         print(f"Access token length: {len(access_token)} characters")
 
         return True

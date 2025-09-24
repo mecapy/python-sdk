@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling", "hatch-vcs"]
+requires = ["hatchling", "uv-dynamic-versioning"]
 build-backend = "hatchling.build"
 
 [project]
@@ -11,7 +11,7 @@ license = {text = "MIT"}
 authors = [
     {name = "Jocelyn LOPEZ", email = "jocelyn.lopez@mecapy.com"}
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -54,10 +54,13 @@ Issues = "https://github.com/mecapy/python-sdk/issues"
 Documentation = "https://mecapy.github.io/python-sdk"
 
 [tool.hatch.build.targets.wheel]
-packages = ["mecapy_sdk"]
+packages = ["mecapy"]
 
 [tool.hatch.version]
-path = "mecapy_sdk/__version__.py"
+source = "uv-dynamic-versioning"
+
+[tool.uv-dynamic-versioning]
+fallback-version = "0.0.0"
 
 # =============================================================================
 #                                   PyTest
@@ -67,7 +70,7 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
-addopts = "-v --tb=short --strict-markers --cov=mecapy_sdk --cov-report=xml --cov-report=html --cov-report=term-missing"
+addopts = "-v --tb=short --strict-markers --cov=mecapy --cov-report=xml --cov-report=html --cov-report=term-missing"
 asyncio_mode = "auto"
 markers = [
     "unit: Unit tests",
@@ -80,7 +83,7 @@ markers = [
 #                                   Coverage
 # =============================================================================
 [tool.coverage.run]
-source = ["mecapy_sdk"]
+source = ["mecapy"]
 omit = [
     "tests/*",
     "*/__init__.py",

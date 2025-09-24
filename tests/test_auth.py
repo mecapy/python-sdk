@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 
-from mecapy_sdk.auth import MecapyAuth
-from mecapy_sdk.exceptions import AuthenticationError, NetworkError
+from mecapy.auth import MecapyAuth
+from mecapy.exceptions import AuthenticationError, NetworkError
 
 
 @pytest.mark.unit

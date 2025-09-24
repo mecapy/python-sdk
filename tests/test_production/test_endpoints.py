@@ -14,7 +14,7 @@ How to run:
 - Run: pytest -m production -q
 
 Authentication Setup:
-1. First authenticate interactively: python -m mecapy_sdk.auth
+1. First authenticate interactively: python -m mecapy.auth
 2. Then run tests: pytest -m production -q
 
 Notes
@@ -28,8 +28,8 @@ Notes
 import pytest
 from exceptions import AuthenticationError
 
-from mecapy_sdk import MecaPyClient
-from mecapy_sdk.models import APIResponse
+from mecapy import MecaPyClient
+from mecapy.models import APIResponse
 
 pytestmark = pytest.mark.production
 
