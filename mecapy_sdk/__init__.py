@@ -1,16 +1,17 @@
 """MecaPy SDK - Python client for MecaPy API."""
 
-from .__version__ import __version__
+import importlib.metadata
+
+try:
+    version = importlib.metadata.version(__name__)
+except importlib.metadata.PackageNotFoundError:
+    version = "0.0.0"  # Fallback for development mode
+
 from .client import MecaPyClient
-from .exceptions import MecaPyError, AuthenticationError, ValidationError, NotFoundError
 from .config import Config
 
 __all__ = [
-    "__version__",
     "MecaPyClient",
-    "MecaPyError",
-    "AuthenticationError", 
-    "ValidationError",
-    "NotFoundError",
     "Config",
+    "version",
 ]

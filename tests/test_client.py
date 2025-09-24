@@ -1,37 +1,34 @@
 """Tests for MecaPy client."""
 
-import pytest
-from unittest.mock import AsyncMock, patch, mock_open
 from pathlib import Path
+from unittest.mock import AsyncMock, patch
+
 import httpx
+import pytest
 
 from mecapy_sdk import MecaPyClient
-from mecapy_sdk.models import UserInfo, UploadResponse, APIResponse
-from mecapy_sdk.exceptions import AuthenticationError, ValidationError, NotFoundError, ServerError, NetworkError
+from mecapy_sdk.exceptions import AuthenticationError, NetworkError, NotFoundError, ServerError, ValidationError
+from mecapy_sdk.models import APIResponse, UploadResponse, UserInfo
 
 
 @pytest.mark.unit
 class TestMecaPyClient:
     """Test MecaPyClient class."""
-    
+
     def test_init(self, mock_auth):
         """Test client initialization."""
-        client = MecaPyClient(
-            api_url="https://api.example.com/",
-            auth=mock_auth,
-            timeout=15.0
-        )
-        
+        client = MecaPyClient(api_url="https://api.example.com/", auth=mock_auth, timeout=15.0)
+
         assert client.api_url == "https://api.example.com"
         assert client.auth == mock_auth
         assert client.timeout == 15.0
-    
+
     @pytest.mark.asyncio
     async def test_context_manager(self, mock_auth):
         """Test client as async context manager."""
         async with MecaPyClient("https://api.example.com", auth=mock_auth) as client:
             assert isinstance(client, MecaPyClient)
-    
+
     @pytest.mark.asyncio
     async def test_make_request_authentication_error(self, client):
         """Test request with authentication error."""
@@ -39,10 +36,10 @@ class TestMecaPyClient:
             mock_response = AsyncMock()
             mock_response.status_code = 401
             mock_client.request = AsyncMock(return_value=mock_response)
-            
+
             with pytest.raises(AuthenticationError, match="Authentication failed"):
                 await client._make_request("GET", "/test")
-    
+
     @pytest.mark.asyncio
     async def test_make_request_not_found(self, client):
         """Test request with 404 error."""
@@ -50,10 +47,10 @@ class TestMecaPyClient:
             mock_response = AsyncMock()
             mock_response.status_code = 404
             mock_client.request = AsyncMock(return_value=mock_response)
-            
+
             with pytest.raises(NotFoundError, match="Resource not found"):
                 await client._make_request("GET", "/test")
-    
+
     @pytest.mark.asyncio
     async def test_make_request_validation_error(self, client):
         """Test request with validation error."""
@@ -62,10 +59,10 @@ class TestMecaPyClient:
             mock_response.status_code = 422
             mock_response.json = AsyncMock(return_value={"detail": "Validation failed"})
             mock_client.request = AsyncMock(return_value=mock_response)
-            
+
             with pytest.raises(ValidationError, match="Request validation failed"):
                 await client._make_request("GET", "/test")
-    
+
     @pytest.mark.asyncio
     async def test_make_request_server_error(self, client):
         """Test request with server error."""
@@ -74,56 +71,52 @@ class TestMecaPyClient:
             mock_response.status_code = 500
             mock_response.text = "Internal server error"
             mock_client.request = AsyncMock(return_value=mock_response)
-            
+
             with pytest.raises(ServerError, match="Server error"):
                 await client._make_request("GET", "/test")
-    
+
     @pytest.mark.asyncio
     async def test_make_request_network_error(self, client):
         """Test request with network error."""
         with patch.object(client, "_client") as mock_client:
             mock_client.request = AsyncMock(side_effect=httpx.RequestError("Connection failed"))
-            
+
             with pytest.raises(NetworkError, match="Network error"):
                 await client._make_request("GET", "/test")
-    
+
     @pytest.mark.asyncio
     async def test_get_root(self, client_no_auth):
         """Test get_root method."""
-        response_data = {
-            "message": "Welcome to API",
-            "status": "running",
-            "version": "1.0.0"
-        }
-        
+        response_data = {"message": "Welcome to API", "status": "running", "version": "1.0.0"}
+
         with patch.object(client_no_auth, "_client") as mock_client:
             mock_response = AsyncMock()
             mock_response.status_code = 200
             mock_response.json = AsyncMock(return_value=response_data)
             mock_client.request = AsyncMock(return_value=mock_response)
-            
+
             result = await client_no_auth.get_root()
-            
+
             assert isinstance(result, APIResponse)
             assert result.message == "Welcome to API"
             assert result.status == "running"
             assert result.version == "1.0.0"
-    
+
     @pytest.mark.asyncio
     async def test_health_check(self, client_no_auth):
         """Test health_check method."""
         response_data = {"status": "ok"}
-        
+
         with patch.object(client_no_auth, "_client") as mock_client:
             mock_response = AsyncMock()
             mock_response.status_code = 200
             mock_response.json = AsyncMock(return_value=response_data)
             mock_client.request = AsyncMock(return_value=mock_response)
-            
+
             result = await client_no_auth.health_check()
-            
+
             assert result == {"status": "ok"}
-    
+
     @pytest.mark.asyncio
     async def test_get_current_user(self, client):
         """Test get_current_user method."""
@@ -132,180 +125,179 @@ class TestMecaPyClient:
             "email": "test@example.com",
             "given_name": "Test",
             "family_name": "User",
-            "roles": ["user"]
+            "roles": ["user"],
         }
-        
+
         with patch.object(client, "_client") as mock_client:
             mock_response = AsyncMock()
             mock_response.status_code = 200
             mock_response.json = AsyncMock(return_value=user_data)
             mock_client.request = AsyncMock(return_value=mock_response)
-            
+
             result = await client.get_current_user()
-            
+
             assert isinstance(result, UserInfo)
             assert result.preferred_username == "testuser"
             assert result.email == "test@example.com"
             assert result.roles == ["user"]
-    
+
     @pytest.mark.asyncio
     async def test_upload_archive_string_path(self, client):
         """Test upload_archive with string file path."""
         file_path = "/path/to/test.zip"
         file_content = b"fake zip content"
-        
+
         upload_data = {
             "message": "Upload successful",
             "original_filename": "test.zip",
             "uploaded_filename": "abc123.zip",
             "md5": "md5hash",
-            "size": len(file_content)
+            "size": len(file_content),
         }
-        
-        with patch("pathlib.Path.exists", return_value=True), \
-             patch("pathlib.Path.read_bytes", return_value=file_content), \
-             patch.object(client, "_client") as mock_client:
-            
+
+        with (
+            patch("pathlib.Path.exists", return_value=True),
+            patch("pathlib.Path.read_bytes", return_value=file_content),
+            patch.object(client, "_client") as mock_client,
+        ):
             mock_response = AsyncMock()
             mock_response.status_code = 200
             mock_response.json = AsyncMock(return_value=upload_data)
             mock_client.request = AsyncMock(return_value=mock_response)
-            
+
             result = await client.upload_archive(file_path)
-            
+
             assert isinstance(result, UploadResponse)
             assert result.original_filename == "test.zip"
             assert result.uploaded_filename == "abc123.zip"
-    
+
     @pytest.mark.asyncio
     async def test_upload_archive_path_object(self, client):
         """Test upload_archive with Path object."""
         file_path = Path("/path/to/test.zip")
         file_content = b"fake zip content"
-        
+
         upload_data = {
             "message": "Upload successful",
             "original_filename": "test.zip",
             "uploaded_filename": "abc123.zip",
             "md5": "md5hash",
-            "size": len(file_content)
+            "size": len(file_content),
         }
-        
-        with patch("pathlib.Path.exists", return_value=True), \
-             patch("pathlib.Path.read_bytes", return_value=file_content), \
-             patch.object(client, "_client") as mock_client:
-            
+
+        with (
+            patch("pathlib.Path.exists", return_value=True),
+            patch("pathlib.Path.read_bytes", return_value=file_content),
+            patch.object(client, "_client") as mock_client,
+        ):
             mock_response = AsyncMock()
             mock_response.status_code = 200
             mock_response.json = AsyncMock(return_value=upload_data)
             mock_client.request = AsyncMock(return_value=mock_response)
-            
+
             result = await client.upload_archive(file_path)
-            
+
             assert isinstance(result, UploadResponse)
             assert result.original_filename == "test.zip"
-    
+
     @pytest.mark.asyncio
     async def test_upload_archive_file_not_found(self, client):
         """Test upload_archive with non-existent file."""
         file_path = "/path/to/nonexistent.zip"
-        
+
         with patch("pathlib.Path.exists", return_value=False):
             with pytest.raises(ValidationError, match="File not found"):
                 await client.upload_archive(file_path)
-    
+
     @pytest.mark.asyncio
     async def test_upload_archive_invalid_extension(self, client):
         """Test upload_archive with invalid file extension."""
         file_path = "/path/to/test.txt"
-        
+
         with patch("pathlib.Path.exists", return_value=True):
             with pytest.raises(ValidationError, match="Only ZIP files are allowed"):
                 await client.upload_archive(file_path)
-    
+
     @pytest.mark.asyncio
     async def test_upload_archive_file_object(self, client):
         """Test upload_archive with file-like object."""
         file_content = b"fake zip content"
-        
+
         upload_data = {
             "message": "Upload successful",
             "original_filename": "test.zip",
             "uploaded_filename": "abc123.zip",
             "md5": "md5hash",
-            "size": len(file_content)
+            "size": len(file_content),
         }
-        
+
         mock_file = AsyncMock()
         mock_file.read.return_value = file_content
-        
+
         with patch.object(client, "_client") as mock_client:
             mock_response = AsyncMock()
             mock_response.status_code = 200
             mock_response.json = AsyncMock(return_value=upload_data)
             mock_client.request = AsyncMock(return_value=mock_response)
-            
+
             result = await client.upload_archive(mock_file, filename="test.zip")
-            
+
             assert isinstance(result, UploadResponse)
             assert result.original_filename == "test.zip"
-    
+
     @pytest.mark.asyncio
     async def test_upload_archive_file_object_no_filename(self, client):
         """Test upload_archive with file-like object but no filename."""
         mock_file = AsyncMock()
-        
+
         with pytest.raises(ValidationError, match="filename is required"):
             await client.upload_archive(mock_file)
-    
+
     def test_from_env_default_urls(self):
-        """Test from_env with default URLs."""
+        """Test from venv with default URLs."""
         with patch.dict("os.environ", {}, clear=True):
-            client = MecaPyClient.from_env()
-            
+            client = MecaPyClient()
+
             assert client.api_url == "https://api.mecapy.com"
             assert client.auth is None
-    
+
     def test_from_env_success(self):
-        """Test successful from_env creation."""
+        """Test successful from env creation."""
         env_vars = {
             "MECAPY_API_URL": "https://api.example.com",
             "MECAPY_KEYCLOAK_URL": "https://auth.example.com",
             "MECAPY_USERNAME": "testuser",
             "MECAPY_PASSWORD": "testpass",
-            "MECAPY_TIMEOUT": "45.0"
+            "MECAPY_TIMEOUT": "45.0",
         }
-        
+
         with patch.dict("os.environ", env_vars):
-            client = MecaPyClient.from_env()
-            
+            client = MecaPyClient()
+
             assert client.api_url == "https://api.example.com"
             assert client.auth is not None
             assert client.auth.keycloak_url == "https://auth.example.com"
             assert client.auth.username == "testuser"
             assert client.timeout == 45.0
-    
+
     def test_from_env_custom_urls(self):
-        """Test from_env with custom URLs."""
-        env_vars = {
-            "MECAPY_API_URL": "https://api.example.com",
-            "MECAPY_KEYCLOAK_URL": "https://auth.example.com"
-        }
-        
+        """Test from env with custom URLs."""
+        env_vars = {"MECAPY_API_URL": "https://api.example.com", "MECAPY_KEYCLOAK_URL": "https://auth.example.com"}
+
         with patch.dict("os.environ", env_vars):
-            client = MecaPyClient.from_env()
-            
+            client = MecaPyClient()
+
             assert client.api_url == "https://api.example.com"
             assert client.auth is None  # No username/password, so no auth
             assert client.timeout == 30.0
-    
+
     @pytest.mark.asyncio
     async def test_make_request_auth_token_exception(self, client):
         """Test request when getting auth token raises exception."""
         with patch.object(client.auth, "get_access_token", side_effect=Exception("Token error")):
             with pytest.raises(AuthenticationError, match="Failed to get access token: Token error"):
                 await client._make_request("GET", "/test", authenticated=True)
-    
+
     @pytest.mark.asyncio
     async def test_make_request_403_error(self, client):
         """Test request with 403 error."""
@@ -313,10 +305,10 @@ class TestMecaPyClient:
             mock_response = AsyncMock()
             mock_response.status_code = 403
             mock_client.request = AsyncMock(return_value=mock_response)
-            
+
             with pytest.raises(AuthenticationError, match="Access forbidden"):
                 await client._make_request("GET", "/test")
-    
+
     @pytest.mark.asyncio
     async def test_make_request_4xx_error(self, client):
         """Test request with generic 4xx error."""
@@ -325,51 +317,43 @@ class TestMecaPyClient:
             mock_response.status_code = 400
             mock_response.text = "Bad Request"
             mock_client.request = AsyncMock(return_value=mock_response)
-            
+
             with pytest.raises(ValidationError, match="Client error: Bad Request"):
                 await client._make_request("GET", "/test")
-    
+
     @pytest.mark.asyncio
     async def test_test_protected_route(self, client):
         """Test test_protected_route method."""
         mock_response_data = {
-            "message": "Access granted", 
-            "user_info": {
-                "preferred_username": "testuser",
-                "email": "test@example.com",
-                "roles": ["user"]
-            },
-            "endpoint": "/auth/protected"
+            "message": "Access granted",
+            "user_info": {"preferred_username": "testuser", "email": "test@example.com", "roles": ["user"]},
+            "endpoint": "/auth/protected",
         }
-        
+
         with patch.object(client, "_make_request") as mock_request:
             mock_response = AsyncMock()
             mock_response.json = AsyncMock(return_value=mock_response_data)
             mock_request.return_value = mock_response
-            
+
             result = await client.test_protected_route()
-            
+
             mock_request.assert_called_once_with("GET", "/auth/protected")
             assert result.message == "Access granted"
             assert result.user_info.preferred_username == "testuser"
             assert result.endpoint == "/auth/protected"
-    
+
     @pytest.mark.asyncio
     async def test_test_admin_route(self, client):
         """Test test_admin_route method."""
-        mock_response_data = {
-            "message": "Admin access granted", 
-            "admin_access": True,
-            "endpoint": "/auth/admin"
-        }
-        
+        mock_response_data = {"message": "Admin access granted", "admin_access": True, "endpoint": "/auth/admin"}
+
         with patch.object(client, "_make_request") as mock_request:
             mock_response = AsyncMock()
             mock_response.json = AsyncMock(return_value=mock_response_data)
             mock_request.return_value = mock_response
-            
+
             result = await client.test_admin_route()
-            
+
             mock_request.assert_called_once_with("GET", "/auth/admin")
             assert result.message == "Admin access granted"
             assert result.admin_access is True

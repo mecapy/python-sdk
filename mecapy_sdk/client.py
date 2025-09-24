@@ -1,13 +1,12 @@
 """Main client for MecaPy SDK."""
 
 import inspect
-import os
 from pathlib import Path
 from typing import Any, BinaryIO
 
 import httpx
 
-from .__version__ import __version__
+from . import version
 from .auth import MecapyAuth
 from .config import config
 from .exceptions import AuthenticationError, NetworkError, NotFoundError, ServerError, ValidationError
@@ -17,40 +16,13 @@ from .models import AdminResponse, APIResponse, ProtectedResponse, UploadRespons
 class MecaPyClient:
     """Main client for interacting with MecaPy API."""
 
-    def __init__(
-        self,
-        api_url: str | None = None,
-        auth: MecapyAuth | None = None,
-        username: str | None = None,
-        password: str | None = None,
-        timeout: float = config.timeout,
-    ):
-        """
-        Initialize MecaPy client.
-
-        Args:
-            api_url: Base URL of the MecaPy API (defaults to config.api_url)
-            auth: MecapyAuth instance for authentication (optional if username/password provided)
-            username: Username for authentication (alternative to auth parameter)
-            password: Password for authentication (alternative to auth parameter)
-            timeout: Request timeout in seconds
-        """
+    def __init__(self, api_url: str | None = None, timeout: float = config.timeout):
+        self.auth = MecapyAuth()
         self.api_url = (api_url or config.api_url).rstrip("/")
         self.timeout = timeout
 
-        # Initialize authentication
-        if auth is not None:
-            self.auth = auth
-        elif username and password:
-            # Create auth instance - it will use global config for OIDC settings
-            self.auth = MecapyAuth()
-            # Note: MecapyAuth uses OAuth2 + PKCE flow, not username/password directly
-            # This is for backward compatibility, but users should use the web flow
-        else:
-            self.auth = None
-
         # Create HTTP client
-        self._client = httpx.AsyncClient(timeout=timeout, headers={"User-Agent": f"mecapy-sdk/{__version__}"})
+        self._client = httpx.AsyncClient(timeout=self.timeout, headers={"User-Agent": f"mecapy-sdk/{version}"})
 
     async def __aenter__(self):
         """Async context manager entry."""
@@ -65,7 +37,7 @@ class MecaPyClient:
         await self._client.aclose()
 
     async def _json(self, response: httpx.Response) -> dict[str, Any]:
-        """Return JSON from response, awaiting if the test/mocks provide a coroutine."""
+        """Return JSON from response, awaiting if caller provide a coroutine."""
         data = response.json()
         if inspect.isawaitable(data):
             return await data
@@ -276,28 +248,3 @@ class MecaPyClient:
         response = await self._make_request("POST", "/upload/archive", files=files)
         data = await self._json(response)
         return UploadResponse(**data)
-
-    @classmethod
-    def from_env(cls) -> "MecaPyClient":
-        """
-        Create MecaPyClient from environment variables.
-
-        Expected environment variables:
-        - MECAPY_API_URL: MecaPy API base URL (optional, defaults to Config.MECAPY_API_URL)
-        - MECAPY_AUTH_URL: Keycloak server URL (optional, defaults to Config.MECAPY_AUTH_URL)
-        - MECAPY_REALM: Keycloak realm (optional, defaults to Config.DEFAULT_REALM)
-        - MECAPY_CLIENT_ID: Keycloak client ID (optional, defaults to Config.DEFAULT_CLIENT_ID)
-        - MECAPY_USERNAME: Username (optional)
-        - MECAPY_PASSWORD: Password (optional)
-        - MECAPY_TIMEOUT: Request timeout (optional, defaults to Config.DEFAULT_TIMEOUT)
-
-        Returns
-        -------
-            MecaPyClient instance with default production URLs
-        """
-        return cls(
-            api_url=os.getenv("MECAPY_API_URL", config.api_url),
-            username=os.getenv("MECAPY_USERNAME"),
-            password=os.getenv("MECAPY_PASSWORD"),
-            timeout=float(os.getenv("MECAPY_TIMEOUT", str(config.timeout))),
-        )
