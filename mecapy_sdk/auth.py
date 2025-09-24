@@ -13,31 +13,7 @@ import requests  # type: ignore[import-untyped]
 from authlib.integrations.requests_client import OAuth2Session  # type: ignore[import-untyped]
 
 from .config import config as conf
-
-
-class AuthenticationError(Exception):
-    """Base exception for authentication errors."""
-
-
-class NoFreePortError(AuthenticationError):
-    """Raised when no free port is found in the provided list."""
-
-    def __init__(self, ports: tuple[int, ...]) -> None:
-        super().__init__(f"No free port found among {ports}")
-
-
-class NoAuthCodeError(AuthenticationError):
-    """Raised when no authorization code is received from OAuth provider."""
-
-    def __init__(self) -> None:
-        super().__init__("No authorization code received from OAuth provider")
-
-
-class NoAccessTokenError(AuthenticationError):
-    """Raised when no access token is found in token response."""
-
-    def __init__(self) -> None:
-        super().__init__("No access token found in token response")
+from .exceptions import NoAccessTokenError, NoAuthCodeError, NoFreePortError
 
 
 class OAuthCallbackHandler(http.server.BaseHTTPRequestHandler):
