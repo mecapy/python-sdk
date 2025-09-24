@@ -20,7 +20,6 @@ class MecaPyClient:
         self.auth = MecapyAuth()
         self.api_url = (api_url or config.api_url).rstrip("/")
         self.timeout = timeout
-
         # Create HTTP client
         self._client = httpx.AsyncClient(timeout=self.timeout, headers={"User-Agent": f"mecapy-sdk/{version}"})
 
@@ -42,6 +41,68 @@ class MecaPyClient:
         if inspect.isawaitable(data):
             return await data
         return data
+
+    def _normalize_username_field(self, data: dict) -> dict:
+        """Normalize username field in response data."""
+        if isinstance(data, dict) and "preferred_username" not in data and "username" in data:
+            data = dict(data)
+            data["preferred_username"] = data["username"]
+        return data
+
+    def _normalize_nested_user_info(self, data: dict) -> dict:
+        """Normalize username field in nested user_info."""
+        if isinstance(data, dict):
+            ui = data.get("user_info")
+            if isinstance(ui, dict) and "preferred_username" not in ui and "username" in ui:
+                ui = dict(ui)
+                ui["preferred_username"] = ui["username"]
+                data = dict(data)
+                data["user_info"] = ui
+        return data
+
+    async def _handle_authentication(self, headers: dict[str, str]) -> None:
+        """Add authentication header if required."""
+        try:
+            token = await self.auth.get_access_token()
+            headers["Authorization"] = f"Bearer {token}"
+        except Exception as e:
+            raise AuthenticationError(f"Failed to get access token: {str(e)}")
+
+    def _handle_response_errors(self, response: httpx.Response) -> None:
+        """Handle HTTP response errors based on status codes."""
+        match response.status_code:
+            case 401:
+                raise AuthenticationError("Authentication failed")
+            case 403:
+                raise AuthenticationError("Access forbidden")
+            case 404:
+                raise NotFoundError("Resource not found")
+            case 422:
+                raise ValidationError("Request validation failed", response.status_code, response.json())
+            case code if 400 <= code < 500:
+                raise ValidationError(f"Client error: {response.text}", response.status_code)
+            case code if code >= 500:
+                raise ServerError(f"Server error: {response.text}", response.status_code)
+
+    async def _prepare_file_upload(self, file: str | Path | BinaryIO, filename: str | None) -> tuple[str, bytes]:
+        """Prepare file for upload, returning filename and content."""
+        if isinstance(file, (str, Path)):
+            file_path = Path(file)
+            if not file_path.exists():
+                raise ValidationError(f"File not found: {file_path}")
+            filename = filename or file_path.name
+            file_content = file_path.read_bytes()
+        else:
+            # Assume it's a file-like object
+            if not filename:
+                raise ValidationError("filename is required when using file-like object")
+            file_content = file.read()
+
+        # Validate file extension
+        if not filename.lower().endswith(".zip"):
+            raise ValidationError("Only ZIP files are allowed")
+
+        return filename, file_content
 
     async def _make_request(self, method: str, endpoint: str, authenticated: bool = True, **kwargs) -> httpx.Response:
         """
@@ -88,32 +149,12 @@ class MecaPyClient:
 
         # Add authentication header if required
         if authenticated and self.auth:
-            try:
-                token = await self.auth.get_access_token()
-                headers["Authorization"] = f"Bearer {token}"
-            except Exception as e:
-                raise AuthenticationError(f"Failed to get access token: {str(e)}")
+            await self._handle_authentication(headers)
 
         try:
             response = await self._client.request(method=method, url=url, headers=headers, **kwargs)
-
-            # Handle different status codes
-            match response.status_code:
-                case 401:
-                    raise AuthenticationError("Authentication failed")
-                case 403:
-                    raise AuthenticationError("Access forbidden")
-                case 404:
-                    raise NotFoundError("Resource not found")
-                case 422:
-                    raise ValidationError("Request validation failed", response.status_code, await self._json(response))
-                case code if 400 <= code < 500:
-                    raise ValidationError(f"Client error: {response.text}", response.status_code)
-                case code if code >= 500:
-                    raise ServerError(f"Server error: {response.text}", response.status_code)
-
+            self._handle_response_errors(response)
             return response
-
         except httpx.RequestError as e:
             raise NetworkError(f"Network error: {str(e)}")
 
@@ -155,11 +196,7 @@ class MecaPyClient:
         response = await self._make_request("GET", "/auth/me")
         data = await self._json(response)
         # Normalize production variants: some deployments may return `username` instead of `preferred_username`
-        if isinstance(data, dict):
-            if "preferred_username" not in data and "username" in data:
-                # Avoid mutating the original dict if it's shared
-                data = dict(data)
-                data["preferred_username"] = data["username"]
+        data = self._normalize_username_field(data)
         return UserInfo(**data)
 
     async def test_protected_route(self) -> ProtectedResponse:
@@ -177,13 +214,7 @@ class MecaPyClient:
         response = await self._make_request("GET", "/auth/protected")
         data = await self._json(response)
         # Normalize production variants for nested user_info
-        if isinstance(data, dict):
-            ui = data.get("user_info")
-            if isinstance(ui, dict) and "preferred_username" not in ui and "username" in ui:
-                ui = dict(ui)
-                ui["preferred_username"] = ui["username"]
-                data = dict(data)
-                data["user_info"] = ui
+        data = self._normalize_nested_user_info(data)
         return ProtectedResponse(**data)
 
     async def test_admin_route(self) -> AdminResponse:
@@ -220,27 +251,7 @@ class MecaPyClient:
             ValidationError: If file is not a ZIP file
             AuthenticationError: If not authenticated
         """
-        # Handle different file input types
-        if isinstance(file, (str, Path)):
-            file_path = Path(file)
-            if not file_path.exists():
-                raise ValidationError(f"File not found: {file_path}")
-
-            filename = filename or file_path.name
-        else:
-            # Assume it's a file-like object
-            if not filename:
-                raise ValidationError("filename is required when using file-like object")
-
-        # Validate file extension
-        if not filename.lower().endswith(".zip"):
-            raise ValidationError("Only ZIP files are allowed")
-
-        # Read file content after validation
-        if isinstance(file, (str, Path)):
-            file_content = file_path.read_bytes()
-        else:
-            file_content = file.read()
+        filename, file_content = await self._prepare_file_upload(file, filename)
 
         # Prepare multipart form data
         files = {"file": (filename, file_content, "application/zip")}
