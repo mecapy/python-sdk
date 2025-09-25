@@ -1,270 +1,325 @@
 """Tests for authentication module."""
 
-from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, patch
+import json
+from unittest.mock import Mock, patch
 
-import httpx
 import pytest
 
-from mecapy.auth import MecapyAuth
-from mecapy.exceptions import AuthenticationError, NetworkError
+from mecapy.auth import MecapyAuth, OAuthCallbackHandler
+from mecapy.exceptions import NoAccessTokenError, NoAuthCodeError, NoFreePortError
+
+
+@pytest.mark.unit
+class TestOAuthCallbackHandler:
+    """Test OAuthCallbackHandler class."""
+
+    def test_do_get_with_code(self):
+        """Test GET request with authorization code."""
+        # Create a mock handler without calling __init__
+        handler = OAuthCallbackHandler.__new__(OAuthCallbackHandler)
+        handler.server = Mock()
+        handler.path = "/callback?code=test_auth_code&state=test_state"
+        handler.send_response = Mock()
+        handler.end_headers = Mock()
+        handler.wfile = Mock()
+
+        handler.do_GET()
+
+        assert handler.server.auth_code == "test_auth_code"
+        handler.send_response.assert_called_once_with(200)
+        handler.wfile.write.assert_called_once_with(
+            b"<h1>Authentication successful!</h1><p>You can close this window.</p>"
+        )
+
+    def test_do_get_without_code(self):
+        """Test GET request without authorization code."""
+        # Create a mock handler without calling __init__
+        handler = OAuthCallbackHandler.__new__(OAuthCallbackHandler)
+        handler.server = Mock(spec=[])  # Empty spec to avoid auto-added attributes
+        handler.path = "/callback?error=access_denied"
+        handler.send_response = Mock()
+        handler.end_headers = Mock()
+        handler.wfile = Mock()
+
+        handler.do_GET()
+
+        # Check that auth_code was not set on the server
+        assert not hasattr(handler.server, "auth_code") or getattr(handler.server, "auth_code", None) is None
+        handler.send_response.assert_called_once_with(400)
+        handler.wfile.write.assert_called_once_with(b"<h1>Error: code not found</h1>")
 
 
 @pytest.mark.unit
 class TestMecapyAuth:
     """Test MecapyAuth class."""
 
-    def test_init(self):
+    @patch("mecapy.auth.config")
+    @patch.object(MecapyAuth, "fetch_oidc_config")
+    @patch.object(MecapyAuth, "set_port")
+    def test_init(self, mock_set_port, mock_fetch_oidc_config, mock_config):
         """Test MecapyAuth initialization."""
-        auth = MecapyAuth(
-            keycloak_url="https://auth.example.com",
-            realm="test-realm",
-            client_id="test-client",
-            username="testuser",
-            password="testpass",
-        )
+        mock_config.auth.client_id = "test-client"
+        mock_config.auth.realm = "test-realm"
+        mock_config.auth.issuer = "https://auth.example.com/realms/test-realm"
+        mock_set_port.return_value = 8085
+        mock_fetch_oidc_config.return_value = {
+            "authorization_endpoint": "https://auth.example.com/auth",
+            "token_endpoint": "https://auth.example.com/token",
+        }
 
-        assert auth.keycloak_url == "https://auth.example.com"
-        assert auth.realm == "test-realm"
+        auth = MecapyAuth()
+
         assert auth.client_id == "test-client"
-        assert auth.username == "testuser"
-        assert auth.password == "testpass"
-        assert auth.token_endpoint == "https://auth.example.com/realms/test-realm/protocol/openid-connect/token"
+        assert auth.realm == "test-realm"
+        assert auth.issuer == "https://auth.example.com/realms/test-realm"
+        assert auth.port == 8085
+        assert auth.redirect_uri == "http://localhost:8085/callback"
+        mock_fetch_oidc_config.assert_called_once()
 
-    def test_init_strips_trailing_slash(self):
-        """Test that trailing slash is stripped from Keycloak URL."""
-        auth = MecapyAuth(keycloak_url="https://auth.example.com/", realm="test")
-        assert auth.keycloak_url == "https://auth.example.com"
+    @patch("socket.socket")
+    def test_is_port_free_available(self, mock_socket):
+        """Test is_port_free when port is available."""
+        mock_socket.return_value.__enter__.return_value.bind.return_value = None
 
-    def test_set_credentials(self):
-        """Test setting credentials."""
-        auth = MecapyAuth("https://auth.example.com")
-        auth._access_token = "old_token"
-        auth._token_expires_at = datetime.now() + timedelta(hours=1)
+        result = MecapyAuth.is_port_free(8080)
 
-        auth.set_credentials("newuser", "newpass")
+        assert result is True
 
-        assert auth.username == "newuser"
-        assert auth.password == "newpass"
-        assert auth._access_token is None
-        assert auth._token_expires_at is None
+    @patch("socket.socket")
+    def test_is_port_free_occupied(self, mock_socket):
+        """Test is_port_free when port is occupied."""
+        mock_socket.return_value.__enter__.return_value.bind.side_effect = OSError()
 
-    def test_is_token_valid_no_token(self):
-        """Test token validation when no token exists."""
-        auth = MecapyAuth("https://auth.example.com")
-        assert not auth._is_token_valid()
+        result = MecapyAuth.is_port_free(8080)
 
-    def test_is_token_valid_expired_token(self):
-        """Test token validation with expired token."""
-        auth = MecapyAuth("https://auth.example.com")
-        auth._access_token = "token"
-        auth._token_expires_at = datetime.now() - timedelta(minutes=1)
+        assert result is False
 
-        assert not auth._is_token_valid()
+    @patch.object(MecapyAuth, "is_port_free")
+    def test_set_port_success(self, mock_is_port_free):
+        """Test successful port setting."""
+        mock_is_port_free.side_effect = [False, True, False]
 
-    def test_is_token_valid_valid_token(self):
-        """Test token validation with valid token."""
-        auth = MecapyAuth("https://auth.example.com")
-        auth._access_token = "token"
-        auth._token_expires_at = datetime.now() + timedelta(hours=1)
+        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
+        result = auth.set_port(8080, 8081, 8082)
 
-        assert auth._is_token_valid()
+        assert result == 8081
 
-    @pytest.mark.asyncio
-    async def test_get_new_token_no_credentials(self):
-        """Test getting new token without credentials."""
-        auth = MecapyAuth("https://auth.example.com")
+    @patch.object(MecapyAuth, "is_port_free")
+    def test_set_port_no_free_port(self, mock_is_port_free):
+        """Test port setting when no port is free."""
+        mock_is_port_free.return_value = False
 
-        with pytest.raises(AuthenticationError, match="Username and password are required"):
-            await auth._get_new_token()
+        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
 
-    @pytest.mark.asyncio
-    async def test_get_new_token_success(self):
+        with pytest.raises(NoFreePortError):
+            auth.set_port(8080, 8081, 8082)
+
+    @patch("requests.get")
+    @patch("mecapy.auth.config")
+    def test_fetch_oidc_config(self, mock_config, mock_get):
+        """Test OIDC configuration fetching."""
+        mock_config.auth.get_oidc_discovery_url.return_value = (
+            "https://auth.example.com/.well-known/openid_configuration"
+        )
+        mock_response = Mock()
+        mock_response.json.return_value = {"issuer": "https://auth.example.com"}
+        mock_get.return_value = mock_response
+
+        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
+        result = auth.fetch_oidc_config()
+
+        assert result == {"issuer": "https://auth.example.com"}
+        mock_get.assert_called_once_with("https://auth.example.com/.well-known/openid_configuration")
+        mock_response.raise_for_status.assert_called_once()
+
+    @patch("http.server.HTTPServer")
+    def test_waiting_for_code_success(self, mock_http_server):
+        """Test successful authorization code waiting."""
+        mock_server = Mock()
+        mock_server.auth_code = "test_code"
+        mock_http_server.return_value.__enter__.return_value = mock_server
+
+        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
+        auth.port = 8080
+
+        result = auth.waiting_for_code()
+
+        assert result == "test_code"
+
+    @patch("http.server.HTTPServer")
+    def test_waiting_for_code_failure(self, mock_http_server):
+        """Test authorization code waiting failure."""
+        mock_server = Mock()
+        del mock_server.auth_code  # No auth_code attribute
+        mock_http_server.return_value.__enter__.return_value = mock_server
+
+        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
+        auth.port = 8080
+
+        with pytest.raises(NoAuthCodeError):
+            auth.waiting_for_code()
+
+    @patch("keyring.set_password")
+    def test_store_token(self, mock_set_password):
+        """Test token storage."""
+        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
+        token_data = {"access_token": "test_token", "refresh_token": "test_refresh"}
+
+        auth._store_token(token_data)
+
+        mock_set_password.assert_called_once_with("MecaPy", "token", json.dumps(token_data))
+
+    @patch("keyring.get_password")
+    def test_retrieve_stored_token_success(self, mock_get_password):
         """Test successful token retrieval."""
-        auth = MecapyAuth("https://auth.example.com", username="testuser", password="testpass")
+        token_data = {"access_token": "test_token"}
+        mock_get_password.return_value = json.dumps(token_data)
 
-        token_response = {"access_token": "new_token", "refresh_token": "refresh_token", "expires_in": 300}
+        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
+        result = auth._retrieve_stored_token()
 
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_response = AsyncMock()
-            mock_response.status_code = 200
-            mock_response.json = AsyncMock(return_value=token_response)
+        assert result == token_data
+        mock_get_password.assert_called_once_with("MecaPy", "token")
 
-            mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=mock_response)
+    @patch("keyring.get_password")
+    def test_retrieve_stored_token_none(self, mock_get_password):
+        """Test token retrieval when no token exists."""
+        mock_get_password.return_value = None
 
-            await auth._get_new_token()
+        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
+        result = auth._retrieve_stored_token()
 
-            assert auth._access_token == "new_token"
-            assert auth._refresh_token == "refresh_token"
-            assert auth._token_expires_at is not None
+        assert result is None
 
+    @patch("keyring.delete_password")
+    def test_clear_stored_token(self, mock_delete_password):
+        """Test token clearing."""
+        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
+
+        auth._clear_stored_token()
+
+        mock_delete_password.assert_called_once_with("MecaPy", "token")
+
+    @patch.object(MecapyAuth, "_retrieve_stored_token")
+    @patch.object(MecapyAuth, "login")
+    def test_get_token_with_stored_token(self, mock_login, mock_retrieve):
+        """Test get_token with stored token."""
+        token_data = {"access_token": "stored_token"}
+        mock_retrieve.return_value = token_data
+
+        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
+        result = auth.get_token()
+
+        assert result == token_data
+        mock_login.assert_not_called()
+
+    @patch.object(MecapyAuth, "_retrieve_stored_token")
+    @patch.object(MecapyAuth, "login")
+    def test_get_token_without_stored_token(self, mock_login, mock_retrieve):
+        """Test get_token without stored token."""
+        mock_retrieve.return_value = None
+        new_token = {"access_token": "new_token"}
+        mock_login.return_value = new_token
+
+        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
+        result = auth.get_token()
+
+        assert result == new_token
+        mock_login.assert_called_once()
+
+    @patch.object(MecapyAuth, "get_token")
     @pytest.mark.asyncio
-    async def test_get_new_token_invalid_credentials(self):
-        """Test token retrieval with invalid credentials."""
-        auth = MecapyAuth("https://auth.example.com", username="baduser", password="badpass")
+    async def test_get_access_token_success(self, mock_get_token):
+        """Test successful access token retrieval."""
+        mock_get_token.return_value = {"access_token": "test_token"}
 
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_response = AsyncMock()
-            mock_response.status_code = 401
+        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
+        result = await auth.get_access_token()
 
-            mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=mock_response)
+        assert result == "test_token"
 
-            with pytest.raises(AuthenticationError, match="Invalid username or password"):
-                await auth._get_new_token()
-
+    @patch.object(MecapyAuth, "get_token")
     @pytest.mark.asyncio
-    async def test_get_new_token_network_error(self):
-        """Test token retrieval with network error."""
-        auth = MecapyAuth("https://auth.example.com", username="testuser", password="testpass")
+    async def test_get_access_token_no_token(self, mock_get_token):
+        """Test access token retrieval with no access token."""
+        mock_get_token.return_value = {"refresh_token": "refresh_only"}
 
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                side_effect=httpx.RequestError("Network error")
-            )
+        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
 
-            with pytest.raises(NetworkError, match="Network error during authentication"):
-                await auth._get_new_token()
+        with pytest.raises(NoAccessTokenError):
+            await auth.get_access_token()
 
-    @pytest.mark.asyncio
-    async def test_get_access_token_valid_token(self):
-        """Test getting access token when current token is valid."""
-        auth = MecapyAuth("https://auth.example.com")
-        auth._access_token = "valid_token"
-        auth._token_expires_at = datetime.now() + timedelta(hours=1)
+    @patch("webbrowser.open")
+    @patch.object(MecapyAuth, "waiting_for_code")
+    @patch.object(MecapyAuth, "_store_token")
+    @patch.object(MecapyAuth, "_create_oauth_client")
+    def test_login_success(self, mock_create_client, mock_store_token, mock_waiting_for_code, mock_webbrowser):
+        """Test successful login."""
+        # Setup mocks
+        mock_client = Mock()
+        mock_client.create_authorization_url.return_value = ("https://auth.url", "state")
+        mock_client.fetch_token.return_value = {"access_token": "new_token"}
+        mock_create_client.return_value = mock_client
+        mock_waiting_for_code.return_value = "auth_code"
 
-        token = await auth.get_access_token()
-        assert token == "valid_token"
+        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
+        auth.authorization_endpoint = "https://auth.example.com/auth"
+        auth.token_endpoint = "https://auth.example.com/token"
 
-    def test_logout(self):
+        result = auth.login()
+
+        assert result == {"access_token": "new_token"}
+        mock_webbrowser.assert_called_once()
+        mock_store_token.assert_called_once_with({"access_token": "new_token"})
+
+    @patch.object(MecapyAuth, "get_session")
+    @patch.object(MecapyAuth, "_clear_stored_token")
+    def test_logout(self, mock_clear_stored_token, mock_get_session):
         """Test logout functionality."""
-        auth = MecapyAuth("https://auth.example.com")
-        auth._access_token = "token"
-        auth._refresh_token = "refresh"
-        auth._token_expires_at = datetime.now()
+        mock_session = Mock()
+        mock_session.token = {"access_token": "token1", "refresh_token": "token2"}
+        mock_get_session.return_value = mock_session
+
+        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
+        auth.token_endpoint = "https://auth.example.com/token"
 
         auth.logout()
 
-        assert auth._access_token is None
-        assert auth._refresh_token is None
-        assert auth._token_expires_at is None
+        assert mock_session.revoke_token.call_count == 2
+        mock_clear_stored_token.assert_called_once()
 
-    def test_from_env_default_url(self):
-        """Test from env with default MECAPY_KEYCLOAK_URL."""
-        with patch.dict("os.environ", {}, clear=True):
-            auth = MecapyAuth()
-            assert auth.keycloak_url == "https://auth.mecapy.com"
+    @patch.object(MecapyAuth, "get_token")
+    @patch.object(MecapyAuth, "_create_oauth_client")
+    def test_get_session_valid_token(self, mock_create_client, mock_get_token):
+        """Test get_session with valid token."""
+        token_data = {"access_token": "valid_token"}
+        mock_get_token.return_value = token_data
+        mock_session = Mock()
+        mock_create_client.return_value = mock_session
 
-    def test_from_env_success(self):
-        """Test successful from env creation."""
-        env_vars = {
-            "MECAPY_KEYCLOAK_URL": "https://auth.example.com",
-            "MECAPY_REALM": "custom-realm",
-            "MECAPY_CLIENT_ID": "custom-client",
-            "MECAPY_USERNAME": "testuser",
-            "MECAPY_PASSWORD": "testpass",
-        }
+        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
+        result = auth.get_session()
 
-        with patch.dict("os.environ", env_vars):
-            auth = MecapyAuth()
+        assert result == mock_session
+        mock_session.ensure_active_token.assert_called_once()
 
-            assert auth.keycloak_url == "https://auth.example.com"
-            assert auth.realm == "custom-realm"
-            assert auth.client_id == "custom-client"
-            assert auth.username == "testuser"
-            assert auth.password == "testpass"
+    @patch.object(MecapyAuth, "get_token")
+    @patch.object(MecapyAuth, "login")
+    @patch.object(MecapyAuth, "_create_oauth_client")
+    def test_get_session_expired_token(self, mock_create_client, mock_login, mock_get_token):
+        """Test get_session with expired token requiring re-login."""
+        # First call returns expired token, second call returns new token
+        mock_get_token.return_value = {"access_token": "expired_token"}
+        new_token = {"access_token": "new_token"}
+        mock_login.return_value = new_token
 
-    @pytest.mark.asyncio
-    async def test_get_access_token_with_refresh(self):
-        """Test get_access_token when refresh token is available."""
-        auth = MecapyAuth("https://auth.example.com", realm="test", client_id="test")
-        auth._access_token = None  # No current token
-        auth._refresh_token = "refresh_token"
+        mock_session_expired = Mock()
+        mock_session_expired.ensure_active_token.side_effect = Exception("Token expired")
+        mock_session_new = Mock()
+        mock_create_client.side_effect = [mock_session_expired, mock_session_new]
 
-        # Mock the refresh token method
-        with patch.object(auth, "_refresh_access_token") as mock_refresh:
-            mock_refresh.return_value = None
-            auth._access_token = "new_token"  # Set after refresh
+        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
+        result = auth.get_session()
 
-            token = await auth.get_access_token()
-            assert token == "new_token"
-            mock_refresh.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_get_access_token_refresh_fails_fallback_to_new_token(self):
-        """Test get_access_token when refresh fails and falls back to new token."""
-        auth = MecapyAuth("https://auth.example.com", realm="test", client_id="test")
-        auth._access_token = None
-        auth._refresh_token = "invalid_refresh"
-
-        with (
-            patch.object(auth, "_refresh_access_token") as mock_refresh,
-            patch.object(auth, "_get_new_token") as mock_new,
-        ):
-            mock_refresh.side_effect = AuthenticationError("Refresh failed")
-            mock_new.return_value = None
-            auth._access_token = "new_token"  # Set after getting new token
-
-            token = await auth.get_access_token()
-            assert token == "new_token"
-            mock_refresh.assert_called_once()
-            mock_new.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_get_new_token_non_200_status(self):
-        """Test _get_new_token with non-200 status code."""
-        auth = MecapyAuth("https://auth.example.com", realm="test", client_id="test")
-        auth.set_credentials("user", "pass")
-
-        mock_response = AsyncMock()
-        mock_response.status_code = 500
-        mock_response.text = "Internal Server Error"
-
-        with patch("httpx.AsyncClient.post", return_value=mock_response):
-            with pytest.raises(AuthenticationError, match="Authentication failed: Internal Server Error"):
-                await auth._get_new_token()
-
-    @pytest.mark.asyncio
-    async def test_refresh_access_token_no_refresh_token(self):
-        """Test _refresh_access_token when no refresh token is available."""
-        auth = MecapyAuth("https://auth.example.com", realm="test", client_id="test")
-        auth._refresh_token = None
-
-        with pytest.raises(AuthenticationError, match="No refresh token available"):
-            await auth._refresh_access_token()
-
-    @pytest.mark.asyncio
-    async def test_refresh_access_token_401_error(self):
-        """Test _refresh_access_token with 401 error."""
-        auth = MecapyAuth("https://auth.example.com", realm="test", client_id="test")
-        auth._refresh_token = "expired_refresh"
-
-        mock_response = AsyncMock()
-        mock_response.status_code = 401
-
-        with patch("httpx.AsyncClient.post", return_value=mock_response):
-            with pytest.raises(AuthenticationError, match="Refresh token expired or invalid"):
-                await auth._refresh_access_token()
-
-    @pytest.mark.asyncio
-    async def test_refresh_access_token_non_200_status(self):
-        """Test _refresh_access_token with non-200 status code."""
-        auth = MecapyAuth("https://auth.example.com", realm="test", client_id="test")
-        auth._refresh_token = "valid_refresh"
-
-        mock_response = AsyncMock()
-        mock_response.status_code = 500
-        mock_response.text = "Server Error"
-
-        with patch("httpx.AsyncClient.post", return_value=mock_response):
-            with pytest.raises(AuthenticationError, match="Token refresh failed: Server Error"):
-                await auth._refresh_access_token()
-
-    @pytest.mark.asyncio
-    async def test_refresh_access_token_network_error(self):
-        """Test _refresh_access_token with network error."""
-        auth = MecapyAuth("https://auth.example.com", realm="test", client_id="test")
-        auth._refresh_token = "valid_refresh"
-
-        with patch("httpx.AsyncClient.post", side_effect=httpx.RequestError("Network error")):
-            with pytest.raises(NetworkError, match="Network error during token refresh"):
-                await auth._refresh_access_token()
+        assert result == mock_session_new
+        mock_login.assert_called_once()

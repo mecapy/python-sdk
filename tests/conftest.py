@@ -1,6 +1,6 @@
 """Pytest configuration and fixtures."""
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -12,18 +12,31 @@ from mecapy.auth import MecapyAuth
 def mock_auth():
     """Mock MecapyAuth instance."""
     auth = AsyncMock(spec=MecapyAuth)
-    auth.get_token.return_value = {"access_token": "mock_token"}
+    auth.get_access_token.return_value = "mock_token"
     auth.get_session.return_value = AsyncMock()
     return auth
 
 
 @pytest.fixture
-def client(mock_auth):
+def client():
     """MecaPyClient instance with mock auth."""
-    return MecaPyClient(api_url="https://api.example.com", auth=mock_auth, timeout=10.0)
+    with patch('mecapy.client.MecapyAuth') as mock_auth_class:
+        mock_auth = AsyncMock()
+        mock_auth.get_access_token.return_value = "mock_token"
+        mock_auth_class.return_value = mock_auth
+
+        client = MecaPyClient(api_url="https://api.example.com", timeout=10.0)
+        client.auth = mock_auth
+        return client
 
 
 @pytest.fixture
 def client_no_auth():
-    """MecaPyClient instance without auth."""
-    return MecaPyClient(api_url="https://api.example.com", auth=None, timeout=10.0)
+    """MecaPyClient instance without auth for public endpoints."""
+    with patch('mecapy.client.MecapyAuth') as mock_auth_class:
+        mock_auth = Mock()
+        mock_auth_class.return_value = mock_auth
+
+        client = MecaPyClient(api_url="https://api.example.com", timeout=10.0)
+        client.auth = None  # Set to None for public endpoints
+        return client

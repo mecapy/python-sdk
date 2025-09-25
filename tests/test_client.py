@@ -1,7 +1,7 @@
 """Tests for MecaPy client."""
 
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import httpx
 import pytest
@@ -15,18 +15,26 @@ from mecapy.models import APIResponse, UploadResponse, UserInfo
 class TestMecaPyClient:
     """Test MecaPyClient class."""
 
-    def test_init(self, mock_auth):
+    @patch("mecapy.client.MecapyAuth")
+    def test_init(self, mock_auth_class):
         """Test client initialization."""
-        client = MecaPyClient(api_url="https://api.example.com/", auth=mock_auth, timeout=15.0)
+        mock_auth = Mock()
+        mock_auth_class.return_value = mock_auth
+
+        client = MecaPyClient(api_url="https://api.example.com/", timeout=15.0)
 
         assert client.api_url == "https://api.example.com"
         assert client.auth == mock_auth
         assert client.timeout == 15.0
 
     @pytest.mark.asyncio
-    async def test_context_manager(self, mock_auth):
+    @patch("mecapy.client.MecapyAuth")
+    async def test_context_manager(self, mock_auth_class):
         """Test client as async context manager."""
-        async with MecaPyClient("https://api.example.com", auth=mock_auth) as client:
+        mock_auth = Mock()
+        mock_auth_class.return_value = mock_auth
+
+        async with MecaPyClient("https://api.example.com") as client:
             assert isinstance(client, MecaPyClient)
 
     @pytest.mark.asyncio
@@ -214,7 +222,8 @@ class TestMecaPyClient:
         """Test upload_archive with invalid file extension."""
         file_path = "/path/to/test.txt"
 
-        with patch("pathlib.Path.exists", return_value=True):
+        # with patch("pathlib.Path.exists", return_value=True):
+        with patch("client._prepare_file_upload.Path.exists", return_value=True):
             with pytest.raises(ValidationError, match="Only ZIP files are allowed"):
                 await client.upload_archive(file_path)
 
@@ -253,43 +262,41 @@ class TestMecaPyClient:
         with pytest.raises(ValidationError, match="filename is required"):
             await client.upload_archive(mock_file)
 
-    def test_from_env_default_urls(self):
-        """Test from venv with default URLs."""
-        with patch.dict("os.environ", {}, clear=True):
-            client = MecaPyClient()
+    @patch.dict("os.environ", {"MECAPY_API_URL": "https://api.mecapy.com"}, clear=True)
+    @patch("mecapy.client.config")
+    def test_from_env_default_urls(self, mock_config):
+        """Test from env with default URLs."""
+        mock_config.api_url = "https://api.mecapy.com"
+        mock_config.timeout = 30.0
 
-            assert client.api_url == "https://api.mecapy.com"
-            assert client.auth is None
+        client = MecaPyClient()
 
-    def test_from_env_success(self):
+        assert client.api_url == "https://api.mecapy.com"
+        assert client.auth is not None
+
+    @patch("mecapy.client.config")
+    def test_from_env_success(self, mock_config):
         """Test successful from env creation."""
-        env_vars = {
-            "MECAPY_API_URL": "https://api.example.com",
-            "MECAPY_KEYCLOAK_URL": "https://auth.example.com",
-            "MECAPY_USERNAME": "testuser",
-            "MECAPY_PASSWORD": "testpass",
-            "MECAPY_TIMEOUT": "45.0",
-        }
+        mock_config.api_url = "https://api.example.com"
+        mock_config.timeout = 45.0
 
-        with patch.dict("os.environ", env_vars):
-            client = MecaPyClient()
+        client = MecaPyClient()
 
-            assert client.api_url == "https://api.example.com"
-            assert client.auth is not None
-            assert client.auth.keycloak_url == "https://auth.example.com"
-            assert client.auth.username == "testuser"
-            assert client.timeout == 45.0
+        assert client.api_url == "https://api.example.com"
+        assert client.auth is not None
+        assert client.timeout == 45.0
 
-    def test_from_env_custom_urls(self):
+    @patch("mecapy.client.config")
+    def test_from_env_custom_urls(self, mock_config):
         """Test from env with custom URLs."""
-        env_vars = {"MECAPY_API_URL": "https://api.example.com", "MECAPY_KEYCLOAK_URL": "https://auth.example.com"}
+        mock_config.api_url = "https://api.example.com"
+        mock_config.timeout = 30.0
 
-        with patch.dict("os.environ", env_vars):
-            client = MecaPyClient()
+        client = MecaPyClient()
 
-            assert client.api_url == "https://api.example.com"
-            assert client.auth is None  # No username/password, so no auth
-            assert client.timeout == 30.0
+        assert client.api_url == "https://api.example.com"
+        assert client.auth is not None  # Auth is always created now
+        assert client.timeout == 30.0
 
     @pytest.mark.asyncio
     async def test_make_request_auth_token_exception(self, client):

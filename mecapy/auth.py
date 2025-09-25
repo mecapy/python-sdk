@@ -12,7 +12,7 @@ import keyring
 import requests  # type: ignore[import-untyped]
 from authlib.integrations.requests_client import OAuth2Session  # type: ignore[import-untyped]
 
-from .config import config as conf
+from .config import config
 from .exceptions import NoAccessTokenError, NoAuthCodeError, NoFreePortError
 
 
@@ -93,9 +93,9 @@ class MecapyAuth:
     CODE_CHALLENGE_METHOD: str = "S256"
 
     def __init__(self) -> None:
-        self.client_id = conf.auth.client_id
-        self.realm = conf.auth.realm
-        self.issuer = conf.auth.issuer
+        self.client_id = config.auth.client_id
+        self.realm = config.auth.realm
+        self.issuer = config.auth.issuer
         self.scopes = list(self.DEFAULT_SCOPES)
         self.port = self.set_port(*self.DEFAULT_PORTS)
         self.redirect_uri = f"http://localhost:{self.port}/callback"
@@ -181,7 +181,7 @@ class MecapyAuth:
             Raised if there is an issue with the HTTP GET request or the response, such
             as a connection error, timeout, or invalid response status.
         """
-        discovery_url = conf.auth.get_oidc_discovery_url()
+        discovery_url = config.auth.get_oidc_discovery_url()
         resp = requests.get(discovery_url)
         resp.raise_for_status()
         return resp.json()

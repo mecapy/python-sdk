@@ -26,9 +26,9 @@ Notes
 """
 
 import pytest
-from exceptions import AuthenticationError
 
 from mecapy import MecaPyClient
+from mecapy.exceptions import AuthenticationError
 from mecapy.models import APIResponse
 
 pytestmark = pytest.mark.production

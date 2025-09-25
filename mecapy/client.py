@@ -16,10 +16,10 @@ from .models import AdminResponse, APIResponse, ProtectedResponse, UploadRespons
 class MecaPyClient:
     """Main client for interacting with MecaPy API."""
 
-    def __init__(self, api_url: str | None = None, timeout: float = config.timeout):
+    def __init__(self, api_url: str | None = None, timeout: float | None = None):
         self.auth = MecapyAuth()
         self.api_url = (api_url or config.api_url).rstrip("/")
-        self.timeout = timeout
+        self.timeout = timeout or config.timeout
         # Create HTTP client
         self._client = httpx.AsyncClient(timeout=self.timeout, headers={"User-Agent": f"mecapy-sdk/{version}"})
 

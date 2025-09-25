@@ -12,6 +12,8 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
+
 # Add the package to path for direct script execution
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -19,6 +21,7 @@ from mecapy.auth import MecapyAuth
 from mecapy.config import config as conf
 
 
+@pytest.mark.interactive
 def test_auth_only():
     """Test OAuth2 + PKCE authentication without API calls."""
     print("=== MecaPy SDK Authentication-Only Test ===")

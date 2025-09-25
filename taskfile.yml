@@ -50,26 +50,26 @@ tasks:
           pytest -m unit
         fi
 
-  test:integration:
-    desc: "Run integration tests only"
+  test:interactive:
+    desc: "Run interactive tests only"
     deps: [ install ]
     cmds:
       - |
         if command -v uv >/dev/null 2>&1; then
-          uv run pytest -m integration
+          uv run pytest -m interactive
         else
-          pytest -m integration
+          pytest -m interactive
         fi
 
-  test:auth:
-    desc: "Run authentication tests only"
+  test:not_production:
+    desc: "Run all tests except production"
     deps: [ install ]
     cmds:
       - |
         if command -v uv >/dev/null 2>&1; then
-          uv run pytest -m auth
+          uv run pytest -m "not production"
         else
-          pytest -m auth
+          pytest -m "not production"
         fi
 
   lint:
