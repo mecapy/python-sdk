@@ -7,7 +7,7 @@ vars:
   SDK_MODULE: mecapy
 
 # Load environment from local files when present
-dotenv: [ ".env.local", ".env" ]
+dotenv: [ "dev/env.local" ]
 
 tasks:
   default:

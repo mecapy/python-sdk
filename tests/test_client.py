@@ -222,8 +222,10 @@ class TestMecaPyClient:
         """Test upload_archive with invalid file extension."""
         file_path = "/path/to/test.txt"
 
-        # with patch("pathlib.Path.exists", return_value=True):
-        with patch("client._prepare_file_upload.Path.exists", return_value=True):
+        with (
+            patch("pathlib.Path.exists", return_value=True),
+            patch("pathlib.Path.read_bytes", return_value=b"fake content"),
+        ):
             with pytest.raises(ValidationError, match="Only ZIP files are allowed"):
                 await client.upload_archive(file_path)
 

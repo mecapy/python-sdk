@@ -4,7 +4,8 @@
       "Bash(pytest:*)",
       "Read",
       "Bash(uv run ruff:*)",
-      "Bash(uv run:*)"
+      "Bash(uv run:*)",
+      "Bash(task test:unit)"
     ],
     "deny": []
   }
