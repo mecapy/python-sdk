@@ -62,6 +62,8 @@ source = "uv-dynamic-versioning"
 
 [tool.uv-dynamic-versioning]
 fallback-version = "0.0.0"
+# Force version recalculation from git
+dirty = true
 
 # =============================================================================
 #                                   PyTest
