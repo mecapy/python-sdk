@@ -107,7 +107,12 @@ task publish:prod
 4. **SonarCloud**: Badge tokens need to be updated in README
 
 ## Version Management
-- Version defined in `mecapy/__version__.py`
-- Automatically extracted by hatch for PyPI
-- Follow semantic versioning (MAJOR.MINOR.PATCH)
-- Update version before major releases
+- **Dynamic versioning** via `uv-dynamic-versioning` from Git tags
+- **Semantic versioning** (MAJOR.MINOR.PATCH) with git tags
+- **Development versions** automatically generated between tags
+
+### Version Behavior
+- **On exact tag**: Package version = tag version (e.g., `0.1.1`)
+- **After tag**: Package version = development version (e.g., `0.1.1.post3.dev0+hash`)
+- **Dirty working directory**: Additional "dirty" suffix
+- **Build artifacts**: Always use exact tag version
