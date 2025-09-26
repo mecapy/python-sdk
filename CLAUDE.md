@@ -27,30 +27,68 @@ git commit -m "Update lockfile: [describe changes]"
 - Requires PYPI_API_TOKEN secret in GitHub
 
 ### 3. Development Commands
+
+#### Environment Setup
 ```bash
-# Install dependencies
-uv sync --extra dev
+# Initialize development environment (installs uv, Python, creates venv)
+task init
 
-# Run tests with coverage
-uv run pytest --cov=mecapy --cov-report=xml --cov-report=html
+# Install dependencies only
+task install
+```
 
-# Lint (currently disabled in CI)
-uv run ruff check .
-uv run ruff format .
+#### Testing
+```bash
+# Run unit tests with coverage
+task test:unit
 
-# Type check (currently disabled in CI)
-uv run mypy mecapy
+# Run interactive tests
+task test:interactive
 
+# Run all tests except production
+task test:not_production
+```
+
+#### Code Quality
+```bash
+# Run all quality checks (lint + typecheck)
+task check
+
+# Format code and fix linting issues
+task format
+```
+
+#### Version Management
+```bash
+# Show version information (git tag, installed package, last build)
+task version
+
+# Set a new version tag
+task version:set VERSION=1.0.0
+
+# Synchronize installed package with git tag version
+task version:sync
+```
+
+#### Build and Publish
+```bash
 # Build package
-uv build
+task build
 
+# Publish to TestPyPI
+task publish:test
+
+# Publish to PyPI
+task publish:prod
 ```
 
 ## Key Configuration Files
 - `pyproject.toml` - Dependencies, metadata, build config, and pytest configuration
+- `taskfile.yml` - Development workflow automation with go-task
+- `.python-version` - Python version specification for uv
 - `sonar-project.properties` - SonarCloud settings (project: mecapy_python-sdk)
-- `mecapy/__version__.py` - Single source of truth for version
 - `.github/workflows/ci.yml` - CI/CD and PyPI publication
+- `dev/env.local` - Local development environment variables
 
 ## Testing Strategy
 - Multi-version testing (Python 3.9-3.13)

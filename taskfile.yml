@@ -15,6 +15,20 @@ tasks:
     cmds:
       - task --list
 
+  check:
+    desc: "Run all quality checks (lint with ruff, typecheck with mypy)"
+    deps: [ install ]
+    cmds:
+      - uv run mypy {{.SDK_MODULE}}
+      - uv run ruff check .
+
+  format:
+    desc: "Format code with ruff and fix check"
+    deps: [ install ]
+    cmds:
+      - uv run ruff format .
+      - uv run ruff check --fix .
+
   install:
     desc: "Install project dependencies (uses uv if available, falls back to pip)"
     cmds:
@@ -29,170 +43,182 @@ tasks:
         fi
 
   test:
-    desc: "Run tests with pytest and coverage"
-    deps: [ install ]
-    cmds:
-      - |
-        if command -v uv >/dev/null 2>&1; then
-          uv run pytest
-        else
-          pytest
-        fi
+    desc: "Run all batch tests"
+    deps: [ install, test:unit ]
+
 
   test:unit:
     desc: "Run unit tests only"
     deps: [ install ]
     cmds:
-      - |
-        if command -v uv >/dev/null 2>&1; then
-          uv run pytest -m unit
-        else
-          pytest -m unit
-        fi
+      - uv run pytest -m unit
 
   test:interactive:
     desc: "Run interactive tests only"
     deps: [ install ]
     cmds:
-      - |
-        if command -v uv >/dev/null 2>&1; then
-          uv run pytest -m interactive
-        else
-          pytest -m interactive
-        fi
+      - uv run pytest -m interactive
 
   test:not_production:
     desc: "Run all tests except production"
     deps: [ install ]
     cmds:
-      - |
-        if command -v uv >/dev/null 2>&1; then
-          uv run pytest -m "not production"
-        else
-          pytest -m "not production"
-        fi
-
-  lint:
-    desc: "Run ruff lint checks"
-    deps: [ install ]
-    cmds:
-      - |
-        if command -v uv >/dev/null 2>&1; then
-          uv run ruff check .
-        else
-          ruff check .
-        fi
-
-  lint:fix:
-    desc: "Run ruff lint checks with --fix"
-    deps: [ install ]
-    cmds:
-      - |
-        if command -v uv >/dev/null 2>&1; then
-          uv run ruff check --fix .
-        else
-          ruff check --fix .
-        fi
-
-  format:
-    desc: "Format code with ruff"
-    deps: [ install ]
-    cmds:
-      - |
-        if command -v uv >/dev/null 2>&1; then
-          uv run ruff format .
-        else
-          ruff format .
-        fi
-
-  typecheck:
-    desc: "Type-check with mypy"
-    deps: [ install ]
-    cmds:
-      - |
-        if command -v uv >/dev/null 2>&1; then
-          uv run mypy {{.SDK_MODULE}}
-        else
-          mypy {{.SDK_MODULE}}
-        fi
+      - uv run pytest -m "not production"
 
   build:
     desc: "Build wheel and sdist using hatchling (via uv if available)"
     deps: [ install ]
     cmds:
-      - |
-        if command -v uv >/dev/null 2>&1; then
-          uv build
-        else
-          python -m build
-        fi
+      - uv build
 
   clean:
     desc: "Clean build, cache and test artifacts"
     cmds:
       - rm -rf dist build *.egg-info .mypy_cache .ruff_cache .pytest_cache .coverage coverage_html htmlcov coverage.xml
 
-  # Quality checks
-  check:
-    desc: "Run all quality checks (lint, typecheck, test)"
-    deps: [ lint, typecheck, test ]
-
   # Pre-commit hooks
-  pre-commit:install:
+  precommit:install:
     desc: "Install pre-commit hooks"
     deps: [ install ]
     cmds:
-      - |
-        if command -v uv >/dev/null 2>&1; then
-          uv run pre-commit install
-        else
-          pre-commit install
-        fi
+      - uv run pre-commit install
 
-  pre-commit:run:
+  precommit:run:
     desc: "Run pre-commit hooks on all files"
     deps: [ install ]
     cmds:
-      - |
-        if command -v uv >/dev/null 2>&1; then
-          uv run pre-commit run --all-files
-        else
-          pre-commit run --all-files
-        fi
+      - uv run pre-commit run --all-files
 
   # Package publication helpers
   publish:test:
     desc: "Publish package to TestPyPI"
     deps: [ build ]
     cmds:
-      - |
-        if command -v uv >/dev/null 2>&1; then
-          uv run twine upload --repository testpypi dist/*
-        else
-          twine upload --repository testpypi dist/*
-        fi
+      - uv run twine upload --repository testpypi dist/*
 
   publish:prod:
     desc: "Publish package to PyPI (production)"
     deps: [ build ]
     cmds:
-      - |
-        if command -v uv >/dev/null 2>&1; then
-          uv run twine upload dist/*
-        else
-          twine upload dist/*
-        fi
+      - uv run twine upload dist/*
 
-  # Version management
-  version:show:
-    desc: "Show current version"
+  # Environment initialization
+  init:
+    desc: "Initialize development environment with uv and Python"
     cmds:
       - |
-        if command -v uv >/dev/null 2>&1; then
-          uv run python -c "from {{.SDK_MODULE}}.__version__ import __version__; print(__version__)"
-        else
-          python -c "from {{.SDK_MODULE}}.__version__ import __version__; print(__version__)"
+        echo "🚀 Initializing development environment..."
+        if ! command -v uv >/dev/null 2>&1; then
+          echo "Installing uv..."
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          export PATH="$HOME/.cargo/bin:$PATH"
         fi
+        echo "Using Python version from .python-version file..."
+        uv python install $(cat .python-version)
+        echo "Creating virtual environment..."
+        uv venv --python $(cat .python-version)
+        echo "Installing dependencies..."
+        uv sync --group dev
+        echo "✅ Environment initialized successfully!"
+
+  # Version management
+  version:
+    desc: "Show current version information"
+    cmds:
+      - |
+        echo "📦 Version Information:"
+        echo "===================="
+
+        # Check git status
+        if ! git diff-index --quiet HEAD -- 2>/dev/null; then
+          echo "⚠️  Working directory has uncommitted changes"
+          GIT_STATUS="dirty"
+        else
+          echo "✅ Working directory is clean"
+          GIT_STATUS="clean"
+        fi
+        echo ""
+
+        # Get git tag version
+        if git describe --tags --abbrev=0 >/dev/null 2>&1; then
+          LATEST_TAG=$(git describe --tags --abbrev=0 | sed 's/^v//')
+          echo "🏷️  Latest git tag: $LATEST_TAG"
+
+          # Show git describe for more context
+          GIT_DESCRIBE=$(git describe --tags --dirty 2>/dev/null || echo "unknown")
+          echo "📋 Git describe: $GIT_DESCRIBE"
+        else
+          echo "🏷️  Latest git tag: No tags found"
+        fi
+
+        # Get installed package version
+        echo -n "📦 Installed package: "
+        INSTALLED_VERSION=$(uv run python -c "
+        try:
+            import importlib.metadata
+            print(importlib.metadata.version('{{.SDK_MODULE}}-sdk'))
+        except Exception as e:
+            print('Not installed or error:', str(e))
+        " 2>/dev/null)
+        echo "$INSTALLED_VERSION"
+
+        # Explain version behavior
+        if [ "$GIT_STATUS" = "dirty" ]; then
+          echo ""
+          echo "💡 Note: Installed package shows dev version because working directory has uncommitted changes."
+          echo "   To get tag version, commit changes and run 'task version:sync'"
+        fi
+
+        # Get build version (if dist exists)
+        if [ -d "dist" ] && [ "$(ls -A dist 2>/dev/null)" ]; then
+          BUILT_VERSION=$(ls dist/*.whl 2>/dev/null | head -1 | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+' | head -1)
+          if [ -n "$BUILT_VERSION" ]; then
+            echo "🔨 Last built: $BUILT_VERSION"
+          fi
+        fi
+
+  version:sync:
+    desc: "Synchronize installed package with git tag version (requires clean working directory)"
+    deps: [ install ]
+    cmds:
+      - |
+        echo "🔄 Synchronizing package version with git tags..."
+        if ! git diff-index --quiet HEAD -- 2>/dev/null; then
+          echo "⚠️  Warning: Working directory has uncommitted changes."
+          echo "   The installed package will still show dev version until changes are committed."
+        fi
+        uv sync --group dev
+        echo "✅ Package version synchronized!"
+
+  version:status:
+    desc: "Show git status and version info"
+    cmds:
+      - |
+        echo "📋 Git Status:"
+        echo "=============="
+        git status --short
+        echo ""
+        if ! git diff-index --quiet HEAD -- 2>/dev/null; then
+          echo "💡 Tip: Commit changes to get clean tag version: 'git add . && git commit -m \"Update files\"'"
+        else
+          echo "✅ Working directory is clean - package version will match git tag"
+        fi
+
+  version:set:
+    desc: "Set version tag (usage: task version:set VERSION=1.0.0)"
+    vars:
+      VERSION: '{{.VERSION}}'
+    cmds:
+      - |
+        if [ -z "{{.VERSION}}" ]; then
+          echo "❌ Please provide VERSION: task version:set VERSION=0.1.0"
+          exit 1
+        fi
+        echo "🏷️  Setting version {{.VERSION}}..."
+        git tag -a "v{{.VERSION}}" -m "Release version {{.VERSION}}"
+        echo "✅ Version {{.VERSION}} tagged successfully!"
+        echo "📌 Don't forget to push the tag: git push origin v{{.VERSION}}"
+        echo "💡 Tip: Run 'task version:sync' to update the installed package version"
 
   # Lock file management
   lock:
