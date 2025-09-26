@@ -8,7 +8,7 @@ import pytest
 
 from mecapy import MecaPyClient
 from mecapy.exceptions import AuthenticationError, NetworkError, NotFoundError, ServerError, ValidationError
-from mecapy.models import APIResponse, UploadResponse, UserInfo
+from mecapy.models import AdminResponse, APIResponse, ProtectedResponse, UploadResponse, UserInfo
 
 
 @pytest.mark.unit
@@ -63,9 +63,9 @@ class TestMecaPyClient:
     async def test_make_request_validation_error(self, client):
         """Test request with validation error."""
         with patch.object(client, "_client") as mock_client:
-            mock_response = AsyncMock()
+            mock_response = Mock()
             mock_response.status_code = 422
-            mock_response.json = AsyncMock(return_value={"detail": "Validation failed"})
+            mock_response.json = Mock(return_value={"detail": "Validation failed"})
             mock_client.request = AsyncMock(return_value=mock_response)
 
             with pytest.raises(ValidationError, match="Request validation failed"):
@@ -266,38 +266,47 @@ class TestMecaPyClient:
 
     @patch.dict("os.environ", {"MECAPY_API_URL": "https://api.mecapy.com"}, clear=True)
     @patch("mecapy.client.config")
-    def test_from_env_default_urls(self, mock_config):
+    @patch("mecapy.client.MecapyAuth")
+    def test_from_env_default_urls(self, mock_auth_class, mock_config):
         """Test from env with default URLs."""
         mock_config.api_url = "https://api.mecapy.com"
         mock_config.timeout = 30.0
+        mock_auth = Mock()
+        mock_auth_class.return_value = mock_auth
 
         client = MecaPyClient()
 
         assert client.api_url == "https://api.mecapy.com"
-        assert client.auth is not None
+        assert client.auth == mock_auth
 
     @patch("mecapy.client.config")
-    def test_from_env_success(self, mock_config):
+    @patch("mecapy.client.MecapyAuth")
+    def test_from_env_success(self, mock_auth_class, mock_config):
         """Test successful from env creation."""
         mock_config.api_url = "https://api.example.com"
         mock_config.timeout = 45.0
+        mock_auth = Mock()
+        mock_auth_class.return_value = mock_auth
 
         client = MecaPyClient()
 
         assert client.api_url == "https://api.example.com"
-        assert client.auth is not None
+        assert client.auth == mock_auth
         assert client.timeout == 45.0
 
     @patch("mecapy.client.config")
-    def test_from_env_custom_urls(self, mock_config):
+    @patch("mecapy.client.MecapyAuth")
+    def test_from_env_custom_urls(self, mock_auth_class, mock_config):
         """Test from env with custom URLs."""
         mock_config.api_url = "https://api.example.com"
         mock_config.timeout = 30.0
+        mock_auth = Mock()
+        mock_auth_class.return_value = mock_auth
 
         client = MecaPyClient()
 
         assert client.api_url == "https://api.example.com"
-        assert client.auth is not None  # Auth is always created now
+        assert client.auth == mock_auth  # Auth is always created now
         assert client.timeout == 30.0
 
     @pytest.mark.asyncio
@@ -367,3 +376,108 @@ class TestMecaPyClient:
             assert result.message == "Admin access granted"
             assert result.admin_access is True
             assert result.endpoint == "/auth/admin"
+
+    def test_normalize_username_field_with_username(self):
+        """Test _normalize_username_field with username field."""
+        client = MecaPyClient.__new__(MecaPyClient)  # Skip __init__
+        data = {"username": "testuser", "email": "test@example.com"}
+
+        result = client._normalize_username_field(data)
+
+        assert result["preferred_username"] == "testuser"
+        assert result["username"] == "testuser"
+        assert result["email"] == "test@example.com"
+
+    def test_normalize_username_field_with_preferred_username(self):
+        """Test _normalize_username_field with preferred_username already present."""
+        client = MecaPyClient.__new__(MecaPyClient)  # Skip __init__
+        data = {"preferred_username": "testuser", "username": "otheruser"}
+
+        result = client._normalize_username_field(data)
+
+        # Should not modify if preferred_username already exists
+        assert result["preferred_username"] == "testuser"
+        assert result["username"] == "otheruser"
+
+    def test_normalize_username_field_non_dict(self):
+        """Test _normalize_username_field with non-dict input."""
+        client = MecaPyClient.__new__(MecaPyClient)  # Skip __init__
+        data = "not a dict"
+
+        result = client._normalize_username_field(data)
+
+        assert result == "not a dict"
+
+    def test_normalize_nested_user_info_with_username(self):
+        """Test _normalize_nested_user_info with username in user_info."""
+        client = MecaPyClient.__new__(MecaPyClient)  # Skip __init__
+        data = {
+            "message": "Hello",
+            "user_info": {"username": "testuser", "email": "test@example.com"}
+        }
+
+        result = client._normalize_nested_user_info(data)
+
+        assert result["user_info"]["preferred_username"] == "testuser"
+        assert result["user_info"]["username"] == "testuser"
+        assert result["message"] == "Hello"
+
+    def test_normalize_nested_user_info_with_preferred_username(self):
+        """Test _normalize_nested_user_info with preferred_username already present."""
+        client = MecaPyClient.__new__(MecaPyClient)  # Skip __init__
+        data = {
+            "message": "Hello",
+            "user_info": {"preferred_username": "testuser", "username": "otheruser"}
+        }
+
+        result = client._normalize_nested_user_info(data)
+
+        # Should not modify if preferred_username already exists
+        assert result["user_info"]["preferred_username"] == "testuser"
+        assert result["user_info"]["username"] == "otheruser"
+
+    def test_normalize_nested_user_info_no_user_info(self):
+        """Test _normalize_nested_user_info without user_info field."""
+        client = MecaPyClient.__new__(MecaPyClient)  # Skip __init__
+        data = {"message": "Hello"}
+
+        result = client._normalize_nested_user_info(data)
+
+        assert result == {"message": "Hello"}
+
+    def test_normalize_nested_user_info_non_dict(self):
+        """Test _normalize_nested_user_info with non-dict input."""
+        client = MecaPyClient.__new__(MecaPyClient)  # Skip __init__
+        data = "not a dict"
+
+        result = client._normalize_nested_user_info(data)
+
+        assert result == "not a dict"
+
+    @pytest.mark.asyncio
+    async def test_json_with_awaitable_response(self):
+        """Test _json method when response.json() returns an awaitable."""
+        client = MecaPyClient.__new__(MecaPyClient)  # Skip __init__
+
+        # Create a mock response where json() returns a coroutine
+        mock_response = Mock()
+        async def mock_json():
+            return {"key": "value"}
+        mock_response.json.return_value = mock_json()
+
+        result = await client._json(mock_response)
+
+        assert result == {"key": "value"}
+
+    @pytest.mark.asyncio
+    async def test_json_with_non_awaitable_response(self):
+        """Test _json method when response.json() returns a regular value."""
+        client = MecaPyClient.__new__(MecaPyClient)  # Skip __init__
+
+        # Create a mock response where json() returns a regular dict
+        mock_response = Mock()
+        mock_response.json.return_value = {"key": "value"}
+
+        result = await client._json(mock_response)
+
+        assert result == {"key": "value"}

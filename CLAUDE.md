@@ -47,7 +47,7 @@ uv build
 ```
 
 ## Key Configuration Files
-- `pyproject.toml` - Dependencies, metadata, and build config
+- `pyproject.toml` - Dependencies, metadata, build config, and pytest configuration
 - `sonar-project.properties` - SonarCloud settings (project: mecapy_python-sdk)
 - `mecapy/__version__.py` - Single source of truth for version
 - `.github/workflows/ci.yml` - CI/CD and PyPI publication
@@ -58,6 +58,9 @@ uv build
 - Authentication flow testing
 - Type safety validation
 - Coverage reporting to SonarCloud
+- **Unit tests**: 100% code coverage with pytest markers
+- **Warning filtering**: RuntimeWarnings from AsyncMock coroutines are filtered out in pyproject.toml
+- **Configuration**: All pytest settings centralized in `pyproject.toml` (markers, filterwarnings, coverage)
 
 ## Common Issues
 1. **Lockfile out of sync**: Run `uv lock` after dependency changes

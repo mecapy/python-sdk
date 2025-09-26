@@ -323,3 +323,43 @@ class TestMecapyAuth:
 
         assert result == mock_session_new
         mock_login.assert_called_once()
+
+    def test_create_oauth_client_with_token(self):
+        """Test _create_oauth_client with token."""
+        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
+        auth.client_id = "test-client"
+        auth.redirect_uri = "http://localhost:8080/callback"
+        auth.token_endpoint = "https://auth.example.com/token"
+
+        token_data = {"access_token": "test_token"}
+
+        with patch("mecapy.auth.OAuth2Session") as mock_oauth_session:
+            result = auth._create_oauth_client(token=token_data)
+
+            mock_oauth_session.assert_called_once_with(
+                client_id="test-client",
+                redirect_uri="http://localhost:8080/callback",
+                token_endpoint="https://auth.example.com/token",
+                code_challenge_method="S256",
+                token=token_data,
+            )
+            assert result == mock_oauth_session.return_value
+
+    def test_create_oauth_client_without_token(self):
+        """Test _create_oauth_client without token."""
+        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
+        auth.client_id = "test-client"
+        auth.redirect_uri = "http://localhost:8080/callback"
+        auth.token_endpoint = "https://auth.example.com/token"
+
+        with patch("mecapy.auth.OAuth2Session") as mock_oauth_session:
+            result = auth._create_oauth_client()
+
+            mock_oauth_session.assert_called_once_with(
+                client_id="test-client",
+                redirect_uri="http://localhost:8080/callback",
+                token_endpoint="https://auth.example.com/token",
+                code_challenge_method="S256",
+                token=None,
+            )
+            assert result == mock_oauth_session.return_value
