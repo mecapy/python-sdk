@@ -187,6 +187,9 @@ tasks:
           echo "⚠️  Warning: Working directory has uncommitted changes."
           echo "   The installed package will still show dev version until changes are committed."
         fi
+        echo "🗑️  Uninstalling current package..."
+        uv pip uninstall mecapy-sdk --quiet || true
+        echo "🔄 Reinstalling with fresh version calculation..."
         uv sync --group dev
         echo "✅ Package version synchronized!"
 
