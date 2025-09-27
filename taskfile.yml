@@ -19,8 +19,8 @@ tasks:
     desc: "Run all quality checks (lint with ruff, typecheck with mypy)"
     deps: [ install ]
     cmds:
-      - uv run mypy {{.SDK_MODULE}}
       - uv run ruff check .
+      - uv run mypy {{.SDK_MODULE}}
 
   format:
     desc: "Format code with ruff and fix check"

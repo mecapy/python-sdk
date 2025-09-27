@@ -9,8 +9,8 @@ import webbrowser
 from typing import Any
 
 import keyring
-import requests  # type: ignore[import-untyped]
-from authlib.integrations.requests_client import OAuth2Session  # type: ignore[import-untyped]
+import requests
+from authlib.integrations.requests_client import OAuth2Session
 
 from .config import config
 from .exceptions import NoAccessTokenError, NoAuthCodeError, NoFreePortError

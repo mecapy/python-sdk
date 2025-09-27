@@ -51,11 +51,20 @@ task test:not_production
 
 #### Code Quality
 ```bash
-# Run all quality checks (lint + typecheck)
+# Run all quality checks (lint + typecheck with mypy and ty)
 task check
 
 # Format code and fix linting issues
 task format
+
+# Run type checking with both mypy and ty
+task typecheck
+
+# Run type checking with mypy only
+task typecheck:mypy
+
+# Run type checking with ty only (fast, experimental)
+task typecheck:ty
 ```
 
 #### Version Management
@@ -123,3 +132,45 @@ The `task version:set` command now automatically handles version synchronization
 If you need manual cleanup: `task version:reset`
 
 This clears all build caches and forces complete reinstallation.
+
+## Type Checking
+
+Le projet utilise deux outils de vérification de types en parallèle :
+
+### MyPy (Production)
+- **Configuration**: `[tool.mypy]` dans `pyproject.toml`
+- **Mode strict** activé avec toutes les options de vérification stricte
+- **Commande**: `task typecheck:mypy` ou `uv run mypy mecapy`
+- **Utilisation**: Outil principal pour la CI/CD et validation de production
+
+### Ty (Expérimental)
+- **Configuration**: `[tool.ty]` dans `pyproject.toml`
+- **Type checker** extrêmement rapide d'Astral (créateurs de ruff)
+- **Status**: Pré-version (alpha), non prêt pour la production
+- **Commande**: `task typecheck:ty` ou `uv run ty check mecapy`
+- **Avantages**:
+  - Performance exceptionnelle (beaucoup plus rapide que mypy)
+  - Configuration stricte équivalente à mypy
+  - Intégration native avec l'écosystème Astral
+
+### Configuration Équivalente
+Les deux outils sont configurés avec des paramètres équivalents :
+
+**MyPy (référence)**:
+- `python_version = "3.13"`
+- `disallow_untyped_defs = true`
+- `disallow_any_generics = true`
+- `warn_return_any = true`
+- Mode strict complet
+
+**Ty (équivalent)**:
+- `python-version = "3.13"`
+- `error-on-warning = true`
+- `possibly-unresolved-reference = "error"`
+- Configuration strict avec overrides pour les sources
+
+### Utilisation Recommandée
+- **Développement local**: Utiliser `ty` pour des vérifications rapides
+- **CI/CD**: Continuer avec `mypy` pour la stabilité
+- **Commande globale**: `task check` exécute les deux outils
+- **Transition progressive**: Observer les différences entre les deux outils
