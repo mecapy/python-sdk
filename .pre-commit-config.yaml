@@ -12,8 +12,8 @@ repos:
     hooks:
       - id: format-precommit
         name: Format code with ruff (auto-fix only)
-#        entry: bash -c 'uv run ruff format . && (uv run ruff check --fix . || echo "⚠️  Some linting issues remain (will be checked in CI)")'
-        entry: "task format"
+        entry: bash -c 'uv run ruff format . && (uv run ruff check --fix . || echo "⚠️  Some linting issues remain (will be checked in CI)")'
         language: system
         pass_filenames: false
-        types: [python]
+
+
