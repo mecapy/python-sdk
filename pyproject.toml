@@ -153,6 +153,7 @@ select = [
     "NPY", # Numpy specific
     "PD", # Panda
 ]
+ignore = ["TRY003"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
@@ -181,30 +182,24 @@ allow_untyped_globals = true
 
 # Plus strict uniquement pour ton code applicatif
 [[tool.mypy.overrides]]
-module = "app.*"
+module = "mecapy.*"
 disallow_untyped_defs = true
 check_untyped_defs = true
+
 # =============================================================================
 #                                    Ty
 # =============================================================================
 [tool.ty]
-# Configuration stricte pour ty (équivalente au mode strict de mypy)
-# Documentation officielle : https://docs.astral.sh/ty/
 
 [tool.ty.environment]
-# Version Python cible (équivalent à python_version de mypy)
 python-version = "3.13"
 
 [tool.ty.terminal]
-# Traiter les avertissements comme des erreurs (équivalent à warn_error de mypy)
 error-on-warning = true
 
 [tool.ty.rules]
-# Configuration des règles pour un mode strict
-# Équivalent aux options strictes de mypy
 possibly-unresolved-reference = "error"
 
-# Configuration pour les sources principales avec strictesse maximale
 [[tool.ty.overrides]]
 include = ["mecapy/**"]
 

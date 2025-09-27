@@ -5,6 +5,35 @@ version: '3'
 
 vars:
   SDK_MODULE: mecapy
+  # Reusable version calculation scripts
+  GET_CURRENT_VERSION: |
+    if git describe --tags --abbrev=0 >/dev/null 2>&1; then
+      git describe --tags --abbrev=0 | sed 's/^v//'
+    else
+      echo "0.0.0"
+    fi
+  CALCULATE_VERSION: |
+    CURRENT="${CURRENT_VERSION}"
+    BUMP_TYPE="${VERSION_TYPE}"
+
+    # Parse current version
+    IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+
+    case "$BUMP_TYPE" in
+      "major")
+        echo "$((MAJOR + 1)).0.0"
+        ;;
+      "minor")
+        echo "${MAJOR}.$((MINOR + 1)).0"
+        ;;
+      "patch")
+        echo "${MAJOR}.${MINOR}.$((PATCH + 1))"
+        ;;
+      *)
+        echo "Error: Invalid bump type: $BUMP_TYPE" >&2
+        exit 1
+        ;;
+    esac
 
 # Load environment from local files when present
 dotenv: [ "dev/env.local" ]
@@ -45,7 +74,6 @@ tasks:
   test:
     desc: "Run all batch tests"
     deps: [ install, test:unit ]
-
 
   test:unit:
     desc: "Run unit tests only"
@@ -102,7 +130,6 @@ tasks:
     cmds:
       - uv run twine upload dist/*
 
-  # Environment initialization
   init:
     desc: "Initialize development environment with uv and Python"
     cmds:
@@ -121,7 +148,6 @@ tasks:
         uv sync --group dev
         echo "✅ Environment initialized successfully!"
 
-  # Version management
   version:
     desc: "Show current version information"
     cmds:
@@ -177,7 +203,8 @@ tasks:
           fi
         fi
 
-  version:reset:
+  _version:reset:
+    internal: true
     desc: "Force complete version reset (clears all caches and rebuilds)"
     cmds:
       - |
@@ -190,38 +217,86 @@ tasks:
         uv sync --group dev --reinstall
         echo "✅ Version completely reset and synchronized!"
 
-  version:status:
-    desc: "Show git status and version info"
+  _version:validate:
+    internal: true
+    desc: "Internal validation for version creation"
+    deps: [ install ]
+    preconditions:
+      - sh: 'git diff-index --quiet HEAD --'
+        msg: 'Working directory has uncommitted changes. Please commit all changes before creating a version.'
     cmds:
       - |
-        echo "📋 Git Status:"
-        echo "=============="
-        git status --short
-        echo ""
-        if ! git diff-index --quiet HEAD -- 2>/dev/null; then
-          echo "💡 Tip: Commit changes to get clean tag version: 'git add . && git commit -m \"Update files\"'"
-        else
-          echo "✅ Working directory is clean - package version will match git tag"
-        fi
+        echo "🔍 Pre-release validation..."
+        echo "=========================="
 
-  version:set:
-    desc: "Set version tag, update dev environment, and build package"
+        echo "1️⃣ Running quality checks (ruff + mypy)..."
+        if ! task check; then
+          echo "❌ Quality checks failed! Please fix all issues before creating a new version."
+          exit 1
+        fi
+        echo "✅ Quality checks passed!"
+
+        echo ""
+        echo "2️⃣ Running unit tests with coverage verification..."
+        if ! uv run pytest -m unit --cov=mecapy --cov-report=term-missing --cov-fail-under=90; then
+          echo "❌ Unit tests failed or coverage below 90%! Please fix tests and improve coverage."
+          exit 1
+        fi
+        echo "✅ Unit tests passed with >90% coverage!"
+
+  _version:get_current:
+    internal: true
+    desc: "Get current version from git tags"
     vars:
-      VERSION: '{{.VERSION}}'
+      CURRENT_VERSION:
+        sh: '{{.GET_CURRENT_VERSION}}'
+    cmds:
+      - echo "{{.CURRENT_VERSION}}"
+
+  _version:calculate_next:
+    internal: true
+    desc: "Calculate next version based on bump type"
+    vars:
+      VERSION_TYPE: '{{.VERSION_TYPE | default "patch"}}'
+      CURRENT_VERSION:
+        sh: '{{.GET_CURRENT_VERSION}}'
+      NEW_VERSION:
+        sh: |
+          CURRENT_VERSION="{{.CURRENT_VERSION}}"
+          VERSION_TYPE="{{.VERSION_TYPE}}"
+          {{.CALCULATE_VERSION}}
+    cmds:
+      - echo "{{.NEW_VERSION}}"
+
+  _version:create:
+    internal: true
+    desc: "Internal version creation workflow"
+    vars:
+      VERSION_TYPE: '{{.VERSION_TYPE | default "patch"}}'
+      CURRENT_VERSION:
+        sh: '{{.GET_CURRENT_VERSION}}'
+      NEW_VERSION:
+        sh: |
+          CURRENT_VERSION="{{.CURRENT_VERSION}}"
+          VERSION_TYPE="{{.VERSION_TYPE}}"
+          {{.CALCULATE_VERSION}}
+    deps: [ _version:validate ]
     cmds:
       - |
-        if [ -z "{{.VERSION}}" ]; then
-          echo "❌ Please provide VERSION: task version:set VERSION=0.1.0"
+        echo "🎯 All validations passed! Creating {{.VERSION_TYPE}} version..."
+        echo "🏷️  Creating version tag {{.NEW_VERSION}}..."
+
+        # Create git tag
+        if git tag -a "v{{.NEW_VERSION}}" -m "Release version {{.NEW_VERSION}}"; then
+          echo "✅ Version {{.NEW_VERSION}} tagged successfully!"
+        else
+          echo "❌ Failed to create tag v{{.NEW_VERSION}}"
           exit 1
         fi
 
-        echo "🏷️  Setting version {{.VERSION}}..."
-        git tag -a "v{{.VERSION}}" -m "Release version {{.VERSION}}"
-        echo "✅ Version {{.VERSION}} tagged successfully!"
-
         echo ""
         echo "🔄 Updating development environment..."
-        task version:reset
+        task _version:reset
 
         echo ""
         echo "🔨 Building package with new version..."
@@ -232,10 +307,76 @@ tasks:
         task version
 
         echo ""
-        echo "🎉 Release {{.VERSION}} is ready!"
+        echo "🎉 New {{.VERSION_TYPE}} version is ready!"
         echo "📌 Next steps:"
-        echo "   1. Push the tag: git push origin v{{.VERSION}}"
+        echo "   1. Push the tag: git push origin v{{.NEW_VERSION}}"
         echo "   2. Publish to PyPI: task publish:prod"
+
+  version:new:major:
+    desc: "Create new major version (X.0.0) with quality and test validation"
+    cmds:
+      - task: _version:create
+        vars:
+          VERSION_TYPE: major
+
+  version:new:minor:
+    desc: "Create new minor version (x.Y.0) with quality and test validation"
+    cmds:
+      - task: _version:create
+        vars:
+          VERSION_TYPE: minor
+
+  version:new:patch:
+    desc: "Create new patch version (x.y.Z) with quality and test validation"
+    cmds:
+      - task: _version:create
+        vars:
+          VERSION_TYPE: patch
+
+  version:preview:major:
+    desc: "Preview what major version increment would create (dry-run)"
+    vars:
+      CURRENT_VERSION:
+        sh: '{{.GET_CURRENT_VERSION}}'
+      NEW_VERSION:
+        sh: |
+          CURRENT_VERSION="{{.CURRENT_VERSION}}"
+          VERSION_TYPE="major"
+          {{.CALCULATE_VERSION}}
+    cmds:
+      - |
+        echo "📦 Current version: {{.CURRENT_VERSION}}"
+        echo "📦 New version: {{.NEW_VERSION}}"
+
+  version:preview:minor:
+    desc: "Preview what minor version increment would create (dry-run)"
+    vars:
+      CURRENT_VERSION:
+        sh: '{{.GET_CURRENT_VERSION}}'
+      NEW_VERSION:
+        sh: |
+          CURRENT_VERSION="{{.CURRENT_VERSION}}"
+          VERSION_TYPE="minor"
+          {{.CALCULATE_VERSION}}
+    cmds:
+      - |
+        echo "📦 Current version: {{.CURRENT_VERSION}}"
+        echo "📦 New version: {{.NEW_VERSION}}"
+
+  version:preview:patch:
+    desc: "Preview what patch version increment would create (dry-run)"
+    vars:
+      CURRENT_VERSION:
+        sh: '{{.GET_CURRENT_VERSION}}'
+      NEW_VERSION:
+        sh: |
+          CURRENT_VERSION="{{.CURRENT_VERSION}}"
+          VERSION_TYPE="patch"
+          {{.CALCULATE_VERSION}}
+    cmds:
+      - |
+        echo "📦 Current version: {{.CURRENT_VERSION}}"
+        echo "📦 New version: {{.NEW_VERSION}}"
 
   # Lock file management
   lock:

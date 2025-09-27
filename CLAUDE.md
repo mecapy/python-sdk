@@ -51,20 +51,11 @@ task test:not_production
 
 #### Code Quality
 ```bash
-# Run all quality checks (lint + typecheck with mypy and ty)
+# Run all quality checks (lint + typecheck with mypy)
 task check
 
 # Format code and fix linting issues
 task format
-
-# Run type checking with both mypy and ty
-task typecheck
-
-# Run type checking with mypy only
-task typecheck:mypy
-
-# Run type checking with ty only (fast, experimental)
-task typecheck:ty
 ```
 
 #### Version Management
@@ -72,12 +63,30 @@ task typecheck:ty
 # Show version information (git tag, installed package, last build)
 task version
 
-# Set version tag + update dev environment + build package (all-in-one)
-task version:set VERSION=1.0.0
+# Preview version increments (dry-run, no changes)
+task version:preview:major   # 0.1.3 -> 1.0.0
+task version:preview:minor   # 0.1.3 -> 0.2.0
+task version:preview:patch   # 0.1.3 -> 0.1.4
 
-# Force complete version reset (manual cleanup)
+# Create new versions with automatic increment + full validation
+task version:new:major       # Breaking changes (X.0.0)
+task version:new:minor       # New features (x.Y.0)
+task version:new:patch       # Bug fixes (x.y.Z)
+
+# Manual cleanup (if needed)
 task version:reset
 ```
+
+**Version Creation Process** (via taskfile internal logic):
+1. ✅ **Quality Checks**: ruff + mypy (no warnings/errors)
+2. ✅ **Test Coverage**: unit tests with >90% coverage
+3. ✅ **Clean Repository**: no uncommitted changes
+4. 🏷️ **Git Tag**: automatic semantic version increment
+5. 🔄 **Environment Update**: sync package version
+6. 🔨 **Package Build**: create distribution files
+
+**Note sur `uv version --bump`**:
+Ce projet utilise la versioning dynamique via git tags (`uv-dynamic-versioning`), donc `uv version --bump` ne peut pas modifier directement le `pyproject.toml`. Les tâches taskfile gèrent les tags Git tout en gardant la simplicité d'uv pour les autres tâches (tests, build, etc.).
 
 #### Build and Publish
 ```bash
@@ -94,6 +103,7 @@ task publish:prod
 ## Key Configuration Files
 - `pyproject.toml` - Dependencies, metadata, build config, and pytest configuration
 - `taskfile.yml` - Development workflow automation with go-task
+- `dev/version_manager.py` - Semantic version management with quality validation
 - `.python-version` - Python version specification for uv
 - `sonar-project.properties` - SonarCloud settings (project: mecapy_python-sdk)
 - `.github/workflows/ci.yml` - CI/CD and PyPI publication
@@ -135,42 +145,18 @@ This clears all build caches and forces complete reinstallation.
 
 ## Type Checking
 
-Le projet utilise deux outils de vérification de types en parallèle :
+Le projet utilise MyPy pour la vérification de types :
 
-### MyPy (Production)
+### MyPy
 - **Configuration**: `[tool.mypy]` dans `pyproject.toml`
 - **Mode strict** activé avec toutes les options de vérification stricte
-- **Commande**: `task typecheck:mypy` ou `uv run mypy mecapy`
+- **Commande**: `task check` (inclut mypy) ou `uv run mypy mecapy`
 - **Utilisation**: Outil principal pour la CI/CD et validation de production
 
-### Ty (Expérimental)
-- **Configuration**: `[tool.ty]` dans `pyproject.toml`
-- **Type checker** extrêmement rapide d'Astral (créateurs de ruff)
-- **Status**: Pré-version (alpha), non prêt pour la production
-- **Commande**: `task typecheck:ty` ou `uv run ty check mecapy`
-- **Avantages**:
-  - Performance exceptionnelle (beaucoup plus rapide que mypy)
-  - Configuration stricte équivalente à mypy
-  - Intégration native avec l'écosystème Astral
-
-### Configuration Équivalente
-Les deux outils sont configurés avec des paramètres équivalents :
-
-**MyPy (référence)**:
+### Configuration
+**MyPy**:
 - `python_version = "3.13"`
 - `disallow_untyped_defs = true`
 - `disallow_any_generics = true`
 - `warn_return_any = true`
 - Mode strict complet
-
-**Ty (équivalent)**:
-- `python-version = "3.13"`
-- `error-on-warning = true`
-- `possibly-unresolved-reference = "error"`
-- Configuration strict avec overrides pour les sources
-
-### Utilisation Recommandée
-- **Développement local**: Utiliser `ty` pour des vérifications rapides
-- **CI/CD**: Continuer avec `mypy` pour la stabilité
-- **Commande globale**: `task check` exécute les deux outils
-- **Transition progressive**: Observer les différences entre les deux outils
