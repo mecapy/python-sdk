@@ -56,14 +56,7 @@ tasks:
     deps: [ install ]
     cmds:
       - uv run ruff format .
-      - uv run ruff check --fix .
-
-  format:precommit:
-    desc: "Format code for pre-commit (non-blocking on unfixable errors)"
-    deps: [ install ]
-    cmds:
-      - uv run ruff format .
-      - uv run ruff check --fix . || echo "⚠️  Some linting issues remain (will be checked in CI)"
+      - uv run ruff check --fix . || true
 
   install:
     desc: "Install project dependencies (uses uv if available, falls back to pip)"
@@ -122,7 +115,8 @@ tasks:
         echo "✅ Pre-commit hooks installed!"
         echo ""
         echo "📋 Configured hooks:"
-        echo "  • format-precommit - Automatic code formatting + auto-fixable linting with ruff"
+        echo "  • ruff-format - Automatic code formatting"
+        echo "  • ruff - Auto-fix linting issues"
         echo "  • check-yaml - Validate YAML files"
         echo "  • check-toml - Validate TOML files"
         echo "  • check-merge-conflict - Detect merge conflicts"
