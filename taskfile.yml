@@ -96,7 +96,7 @@ tasks:
 
   build:
     desc: "Build wheel and sdist using hatchling (via uv if available)"
-    deps: [ install ]
+    deps: [ install, "_version:reset" ]
     cmds:
       - uv build
 
@@ -249,7 +249,6 @@ tasks:
           echo "❌ Quality checks failed! Please fix all issues before creating a new version."
           exit 1
         fi
-        echo "✅ Quality checks passed!"
 
         echo ""
         echo "2️⃣ Running unit tests with coverage verification..."
@@ -257,7 +256,6 @@ tasks:
           echo "❌ Unit tests failed or coverage below required! Please fix tests and improve coverage."
           exit 1
         fi
-        echo "✅ Unit tests passed with required coverage!"
 
   _version:get_current:
     internal: true
@@ -298,34 +296,24 @@ tasks:
     deps: [ "_version:validate" ]
     cmds:
       - |
-        echo "🎯 All validations passed! Creating {{.VERSION_TYPE}} version..."
-        echo "🏷️  Creating version tag {{.NEW_VERSION}}..."
+        echo "--> All validations passed! Creating {{.VERSION_TYPE}} version..."
 
-        # Create git tag
+        echo "--> Creating version tag {{.NEW_VERSION}}..."
         if git tag -a "v{{.NEW_VERSION}}" -m "Release version {{.NEW_VERSION}}"; then
-          echo "✅ Version {{.NEW_VERSION}} tagged successfully!"
+          echo "    |--> Version {{.NEW_VERSION}} tagged successfully!"
         else
-          echo "❌ Failed to create tag v{{.NEW_VERSION}}"
+          echo "    |--> Failed to create tag v{{.NEW_VERSION}}"
           exit 1
         fi
 
         echo ""
-        echo "🔄 Updating development environment..."
-        task "_version:reset"
-
-        echo ""
-        echo "🔨 Building package with new version..."
+        echo "--> Building package with new version..."
         task build
 
         echo ""
-        echo "📋 Final version information:"
-        task version
-
-        echo ""
-        echo "🎉 New {{.VERSION_TYPE}} version is ready!"
-        echo "📌 Next steps:"
-        echo "   1. Push the tag: git push origin v{{.NEW_VERSION}}"
-        echo "   2. Publish to PyPI: task publish:prod"
+        echo "--> Next steps:"
+        echo "    |--> Push the tag: git push origin v{{.NEW_VERSION}}"
+        echo "    |--> Publish to PyPI: task publish:prod"
 
   version:new:major:
     desc: "Create new major version (X.0.0) with quality and test validation"
