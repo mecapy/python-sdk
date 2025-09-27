@@ -177,21 +177,18 @@ tasks:
           fi
         fi
 
-  version:sync:
-    desc: "Synchronize installed package with git tag version (requires clean working directory)"
-    deps: [ install ]
+  version:reset:
+    desc: "Force complete version reset (clears all caches and rebuilds)"
     cmds:
       - |
-        echo "🔄 Synchronizing package version with git tags..."
-        if ! git diff-index --quiet HEAD -- 2>/dev/null; then
-          echo "⚠️  Warning: Working directory has uncommitted changes."
-          echo "   The installed package will still show dev version until changes are committed."
-        fi
+        echo "🧹 Performing complete version reset..."
+        echo "🗑️  Cleaning build artifacts and caches..."
+        rm -rf build/ dist/ *.egg-info/ .eggs/
         echo "🗑️  Uninstalling current package..."
         uv pip uninstall mecapy-sdk --quiet || true
-        echo "🔄 Reinstalling with fresh version calculation..."
-        uv sync --group dev
-        echo "✅ Package version synchronized!"
+        echo "🔄 Reinstalling with complete rebuild..."
+        uv sync --group dev --reinstall
+        echo "✅ Version completely reset and synchronized!"
 
   version:status:
     desc: "Show git status and version info"
@@ -208,7 +205,7 @@ tasks:
         fi
 
   version:set:
-    desc: "Set version tag (usage: task version:set VERSION=1.0.0)"
+    desc: "Set version tag, update dev environment, and build package"
     vars:
       VERSION: '{{.VERSION}}'
     cmds:
@@ -217,11 +214,28 @@ tasks:
           echo "❌ Please provide VERSION: task version:set VERSION=0.1.0"
           exit 1
         fi
+
         echo "🏷️  Setting version {{.VERSION}}..."
         git tag -a "v{{.VERSION}}" -m "Release version {{.VERSION}}"
         echo "✅ Version {{.VERSION}} tagged successfully!"
-        echo "📌 Don't forget to push the tag: git push origin v{{.VERSION}}"
-        echo "💡 Tip: Run 'task version:sync' to update the installed package version"
+
+        echo ""
+        echo "🔄 Updating development environment..."
+        task version:reset
+
+        echo ""
+        echo "🔨 Building package with new version..."
+        task build
+
+        echo ""
+        echo "📋 Final version information:"
+        task version
+
+        echo ""
+        echo "🎉 Release {{.VERSION}} is ready!"
+        echo "📌 Next steps:"
+        echo "   1. Push the tag: git push origin v{{.VERSION}}"
+        echo "   2. Publish to PyPI: task publish:prod"
 
   # Lock file management
   lock:

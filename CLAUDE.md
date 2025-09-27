@@ -63,11 +63,11 @@ task format
 # Show version information (git tag, installed package, last build)
 task version
 
-# Set a new version tag
+# Set version tag + update dev environment + build package (all-in-one)
 task version:set VERSION=1.0.0
 
-# Synchronize installed package with git tag version
-task version:sync
+# Force complete version reset (manual cleanup)
+task version:reset
 ```
 
 #### Build and Publish
@@ -112,7 +112,14 @@ task publish:prod
 - **Development versions** automatically generated between tags
 
 ### Version Behavior
-- **On exact tag**: Package version = tag version (e.g., `0.1.1`)
-- **After tag**: Package version = development version (e.g., `0.1.1.post3.dev0+hash`)
+- **On exact tag**: Package version = tag version (e.g., `0.1.2`)
+- **After tag**: Package version = development version (e.g., `0.1.2.post3.dev0+hash`)
 - **Dirty working directory**: Additional "dirty" suffix
 - **Build artifacts**: Always use exact tag version
+
+### Troubleshooting Version Issues
+The `task version:set` command now automatically handles version synchronization and building.
+
+If you need manual cleanup: `task version:reset`
+
+This clears all build caches and forces complete reinstallation.
