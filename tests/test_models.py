@@ -3,7 +3,13 @@
 import pytest
 from pydantic import ValidationError as PydanticValidationError
 
-from mecapy.models import AdminResponse, APIResponse, ProtectedResponse, UploadResponse, UserInfo
+from mecapy.models import (
+    AdminResponse,
+    APIResponse,
+    ProtectedResponse,
+    UploadResponse,
+    UserInfo,
+)
 
 
 @pytest.mark.unit

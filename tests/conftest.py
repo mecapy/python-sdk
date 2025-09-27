@@ -20,7 +20,7 @@ def mock_auth():
 @pytest.fixture
 def client():
     """MecaPyClient instance with mock auth."""
-    with patch('mecapy.client.MecapyAuth') as mock_auth_class:
+    with patch("mecapy.client.MecapyAuth") as mock_auth_class:
         mock_auth = AsyncMock()
         mock_auth.get_access_token.return_value = "mock_token"
         mock_auth_class.return_value = mock_auth
@@ -33,7 +33,7 @@ def client():
 @pytest.fixture
 def client_no_auth():
     """MecaPyClient instance without auth for public endpoints."""
-    with patch('mecapy.client.MecapyAuth') as mock_auth_class:
+    with patch("mecapy.client.MecapyAuth") as mock_auth_class:
         mock_auth = Mock()
         mock_auth_class.return_value = mock_auth
 

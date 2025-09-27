@@ -7,8 +7,18 @@ import httpx
 import pytest
 
 from mecapy import MecaPyClient
-from mecapy.exceptions import AuthenticationError, NetworkError, NotFoundError, ServerError, ValidationError
-from mecapy.models import AdminResponse, APIResponse, ProtectedResponse, UploadResponse, UserInfo
+from mecapy.exceptions import (
+    AuthenticationError,
+    NetworkError,
+    NotFoundError,
+    ServerError,
+    ValidationError,
+)
+from mecapy.models import (
+    APIResponse,
+    UploadResponse,
+    UserInfo,
+)
 
 
 @pytest.mark.unit
@@ -411,10 +421,7 @@ class TestMecaPyClient:
     def test_normalize_nested_user_info_with_username(self):
         """Test _normalize_nested_user_info with username in user_info."""
         client = MecaPyClient.__new__(MecaPyClient)  # Skip __init__
-        data = {
-            "message": "Hello",
-            "user_info": {"username": "testuser", "email": "test@example.com"}
-        }
+        data = {"message": "Hello", "user_info": {"username": "testuser", "email": "test@example.com"}}
 
         result = client._normalize_nested_user_info(data)
 
@@ -425,10 +432,7 @@ class TestMecaPyClient:
     def test_normalize_nested_user_info_with_preferred_username(self):
         """Test _normalize_nested_user_info with preferred_username already present."""
         client = MecaPyClient.__new__(MecaPyClient)  # Skip __init__
-        data = {
-            "message": "Hello",
-            "user_info": {"preferred_username": "testuser", "username": "otheruser"}
-        }
+        data = {"message": "Hello", "user_info": {"preferred_username": "testuser", "username": "otheruser"}}
 
         result = client._normalize_nested_user_info(data)
 
@@ -461,8 +465,10 @@ class TestMecaPyClient:
 
         # Create a mock response where json() returns a coroutine
         mock_response = Mock()
+
         async def mock_json():
             return {"key": "value"}
+
         mock_response.json.return_value = mock_json()
 
         result = await client._json(mock_response)

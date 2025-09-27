@@ -145,6 +145,7 @@ select = [
     "D", # Docstrings
     "R", # Refactoring
     "UP", # Pyupgrade
+    "S",    # Security (bandit)
     "TRY", # Prevent Exception Handling AntiPatterns
     "C4", # flake8-comprehensions
     "DTZ",  # ban the usage of unsafe naive datetime class
@@ -205,4 +206,3 @@ include = ["mecapy/**"]
 
 [tool.ty.overrides.rules]
 possibly-unresolved-reference = "error"
-

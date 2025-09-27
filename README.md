@@ -42,7 +42,7 @@ async def main():
         # Get current user info
         user = await client.get_current_user()
         print(f"Hello, {user.preferred_username}!")
-        
+
         # Upload a file
         upload_result = await client.upload_archive("my-archive.zip")
         print(f"Uploaded: {upload_result.uploaded_filename}")
@@ -70,7 +70,7 @@ async def main():
         # Check API health
         health = await client.health_check()
         print(f"API Status: {health['status']}")
-        
+
         # Get API info
         info = await client.get_root()
         print(f"API Version: {info.version}")
@@ -234,12 +234,12 @@ async def upload_file():
         # Upload from file path
         result = await client.upload_archive("data.zip")
         print(f"File uploaded: {result.uploaded_filename}")
-        
+
         # Upload from Path object
         file_path = Path("archive.zip")
         result = await client.upload_archive(file_path)
         print(f"MD5: {result.md5}")
-        
+
         # Upload from file-like object
         with open("data.zip", "rb") as f:
             result = await client.upload_archive(f, filename="data.zip")
@@ -261,7 +261,7 @@ async def user_info():
         print(f"Username: {user.preferred_username}")
         print(f"Email: {user.email}")
         print(f"Roles: {', '.join(user.roles)}")
-        
+
         # Test role-based access
         try:
             admin_response = await client.test_admin_route()

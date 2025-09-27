@@ -58,6 +58,13 @@ tasks:
       - uv run ruff format .
       - uv run ruff check --fix .
 
+  format:precommit:
+    desc: "Format code for pre-commit (non-blocking on unfixable errors)"
+    deps: [ install ]
+    cmds:
+      - uv run ruff format .
+      - uv run ruff check --fix . || echo "⚠️  Some linting issues remain (will be checked in CI)"
+
   install:
     desc: "Install project dependencies (uses uv if available, falls back to pip)"
     cmds:
@@ -73,7 +80,7 @@ tasks:
 
   test:
     desc: "Run all batch tests"
-    deps: [ install, test:unit ]
+    deps: [ install, "test:unit" ]
 
   test:unit:
     desc: "Run unit tests only"
@@ -106,16 +113,40 @@ tasks:
 
   # Pre-commit hooks
   precommit:install:
-    desc: "Install pre-commit hooks"
+    desc: "Install pre-commit hooks (includes automatic task format on commit)"
     deps: [ install ]
     cmds:
-      - uv run pre-commit install
+      - |
+        echo "🔧 Installing pre-commit hooks..."
+        uv run pre-commit install
+        echo "✅ Pre-commit hooks installed!"
+        echo ""
+        echo "📋 Configured hooks:"
+        echo "  • format-precommit - Automatic code formatting + auto-fixable linting with ruff"
+        echo "  • check-yaml - Validate YAML files"
+        echo "  • check-toml - Validate TOML files"
+        echo "  • check-merge-conflict - Detect merge conflicts"
+        echo "  • check-case-conflict - Detect case conflicts"
+        echo ""
+        echo "💡 From now on, every commit will automatically run 'task format' and other checks!"
 
   precommit:run:
     desc: "Run pre-commit hooks on all files"
     deps: [ install ]
     cmds:
       - uv run pre-commit run --all-files
+
+  precommit:update:
+    desc: "Update pre-commit hooks to latest versions"
+    deps: [ install ]
+    cmds:
+      - uv run pre-commit autoupdate
+
+  precommit:format-only:
+    desc: "Run only formatting hooks (ruff-format) without strict linting"
+    deps: [ install ]
+    cmds:
+      - uv run pre-commit run ruff-format --all-files
 
   # Package publication helpers
   publish:test:
@@ -280,7 +311,7 @@ tasks:
           CURRENT_VERSION="{{.CURRENT_VERSION}}"
           VERSION_TYPE="{{.VERSION_TYPE}}"
           {{.CALCULATE_VERSION}}
-    deps: [ _version:validate ]
+    deps: [ "_version:validate" ]
     cmds:
       - |
         echo "🎯 All validations passed! Creating {{.VERSION_TYPE}} version..."
@@ -296,7 +327,7 @@ tasks:
 
         echo ""
         echo "🔄 Updating development environment..."
-        task _version:reset
+        task "_version:reset"
 
         echo ""
         echo "🔨 Building package with new version..."
@@ -315,21 +346,21 @@ tasks:
   version:new:major:
     desc: "Create new major version (X.0.0) with quality and test validation"
     cmds:
-      - task: _version:create
+      - task: "_version:create"
         vars:
           VERSION_TYPE: major
 
   version:new:minor:
     desc: "Create new minor version (x.Y.0) with quality and test validation"
     cmds:
-      - task: _version:create
+      - task: "_version:create"
         vars:
           VERSION_TYPE: minor
 
   version:new:patch:
     desc: "Create new patch version (x.y.Z) with quality and test validation"
     cmds:
-      - task: _version:create
+      - task: "_version:create"
         vars:
           VERSION_TYPE: patch
 

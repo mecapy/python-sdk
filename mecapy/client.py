@@ -9,8 +9,20 @@ import httpx
 from . import version
 from .auth import MecapyAuth
 from .config import config
-from .exceptions import AuthenticationError, NetworkError, NotFoundError, ServerError, ValidationError
-from .models import AdminResponse, APIResponse, ProtectedResponse, UploadResponse, UserInfo
+from .exceptions import (
+    AuthenticationError,
+    NetworkError,
+    NotFoundError,
+    ServerError,
+    ValidationError,
+)
+from .models import (
+    AdminResponse,
+    APIResponse,
+    ProtectedResponse,
+    UploadResponse,
+    UserInfo,
+)
 
 
 class MecaPyClient:
@@ -23,11 +35,11 @@ class MecaPyClient:
         # Create HTTP client
         self._client = httpx.AsyncClient(timeout=self.timeout, headers={"User-Agent": f"mecapy-sdk/{version}"})
 
-    async def __aenter__(self):
+    async def __aenter__(self):  # type: ignore
         """Async context manager entry."""
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type, exc_val, exc_tb):  # type: ignore
         """Async context manager exit."""
         await self.close()
 
@@ -64,11 +76,12 @@ class MecaPyClient:
         """Add authentication header if required."""
         try:
             token = await self.auth.get_access_token()
-            headers["Authorization"] = f"Bearer {token}"
         except Exception as e:
-            raise AuthenticationError(f"Failed to get access token: {str(e)}")
+            raise AuthenticationError(f"Failed to get access token: {str(e)}") from e
+        else:
+            headers["Authorization"] = f"Bearer {token}"
 
-    def _handle_response_errors(self, response: httpx.Response) -> None:
+    def _handle_response_errors(self, response: httpx.Response) -> None:  # noqa: C901
         """Handle HTTP response errors based on status codes."""
         match response.status_code:
             case 401:
@@ -104,7 +117,9 @@ class MecaPyClient:
 
         return filename, file_content
 
-    async def _make_request(self, method: str, endpoint: str, authenticated: bool = True, **kwargs) -> httpx.Response:
+    async def _make_request(
+        self, method: str, endpoint: str, authenticated: bool = True, **kwargs: Any
+    ) -> httpx.Response:
         """
         Make an HTTP request to the MecaPy API.
 
@@ -153,10 +168,11 @@ class MecaPyClient:
 
         try:
             response = await self._client.request(method=method, url=url, headers=headers, **kwargs)
+        except httpx.RequestError as e:
+            raise NetworkError(f"Network error: {str(e)}") from e
+        else:
             self._handle_response_errors(response)
             return response
-        except httpx.RequestError as e:
-            raise NetworkError(f"Network error: {str(e)}")
 
     async def get_root(self) -> APIResponse:
         """

@@ -86,7 +86,7 @@ class MecapyAuth:
     DEFAULT_PORTS: tuple[int, ...] = (8085, 8086, 8087, 8088, 8089)
     DEFAULT_SCOPES: tuple[str, ...] = ("openid", "profile", "email")
     KEYRING_SERVICE: str = "MecaPy"
-    KEYRING_TOKEN_KEY: str = "token"
+    KEYRING_TOKEN_KEY: str = "token"  # noqa: S105
     LOCALHOST: str = "127.0.0.1"
     SOCKET_TIMEOUT: float = 0.5
     CODE_VERIFIER_LENGTH: int = 48
@@ -182,7 +182,7 @@ class MecapyAuth:
             as a connection error, timeout, or invalid response status.
         """
         discovery_url = config.auth.get_oidc_discovery_url()
-        resp = requests.get(discovery_url)
+        resp = requests.get(discovery_url, timeout=10)
         resp.raise_for_status()
         return resp.json()
 

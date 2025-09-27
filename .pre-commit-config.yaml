@@ -1,0 +1,18 @@
+repos:
+  # Essential formatting only - task format handles ruff
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-case-conflict
+
+  - repo: local
+    hooks:
+      - id: format-precommit
+        name: Format code with ruff (auto-fix only)
+        entry: bash -c 'uv run ruff format . && (uv run ruff check --fix . || echo "⚠️  Some linting issues remain (will be checked in CI)")'
+        language: system
+        pass_filenames: false
+        types: [python]

@@ -45,4 +45,3 @@ Vérifications typiques dans l’API:
 - Issuer (iss) → doit correspondre à ton realm Keycloak.
 - Audience (aud) → doit correspondre à l’API cible (souvent un client “API” dans Keycloak).
 - Expiration (exp) → vérifier que le token n’est pas expiré.
-
