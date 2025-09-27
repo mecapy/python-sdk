@@ -253,11 +253,11 @@ tasks:
 
         echo ""
         echo "2️⃣ Running unit tests with coverage verification..."
-        if ! uv run pytest -m unit --cov=mecapy --cov-report=term-missing --cov-fail-under=90; then
-          echo "❌ Unit tests failed or coverage below 90%! Please fix tests and improve coverage."
+        if ! task test:unit; then
+          echo "❌ Unit tests failed or coverage below required! Please fix tests and improve coverage."
           exit 1
         fi
-        echo "✅ Unit tests passed with >90% coverage!"
+        echo "✅ Unit tests passed with required coverage!"
 
   _version:get_current:
     internal: true

@@ -76,7 +76,7 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
-addopts = "-v --tb=short --strict-markers --cov=mecapy --cov-report=xml --cov-report=html --cov-report=term-missing"
+addopts = "-q --tb=short --strict-markers --cov=mecapy --cov-report=xml --cov-report=html --cov-report=term-missing --cov-fail-under=90"
 asyncio_mode = "auto"
 markers = [
     "unit: Unit tests (isolated, mocked dependencies)",
