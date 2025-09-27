@@ -56,7 +56,7 @@ tasks:
     deps: [ install ]
     cmds:
       - uv run ruff format .
-      - uv run ruff check --fix . || true
+      - uv run ruff check --fix --exit-zero .
 
   install:
     desc: "Install project dependencies (uses uv if available, falls back to pip)"

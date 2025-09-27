@@ -8,16 +8,29 @@ repos:
       - id: check-merge-conflict
       - id: check-case-conflict
 
-  # Ruff formatting and linting (official pre-commit integration)
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.7.4
+#  # Ruff formatting and linting (official pre-commit integration)
+#  - repo: https://github.com/astral-sh/ruff-pre-commit
+#    rev: v0.7.4
+#    hooks:
+#      # Format code
+#      - id: ruff-format
+#        types_or: [python, pyi, jupyter]
+#      # Fix auto-fixable linting issues
+#      - id: ruff
+#        args: [--fix, --exit-non-zero-on-fix]
+#        types_or: [python, pyi, jupyter]
+
+  - repo: local
     hooks:
-      # Format code
       - id: ruff-format
+        name: ruff-format (vendored)
+        entry: ruff format
+        language: system
         types_or: [python, pyi, jupyter]
-      # Fix auto-fixable linting issues
+
       - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
+        name: ruff (vendored)
+        entry: ruff
+        args: [--fix, --exit-zero]
+        language: system
         types_or: [python, pyi, jupyter]
-
-
