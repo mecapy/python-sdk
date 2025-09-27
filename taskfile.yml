@@ -65,7 +65,7 @@ tasks:
       - |
         if command -v uv >/dev/null 2>&1; then
           echo "Using uv to sync dependencies..."
-          uv sync --group dev
+          uv sync --group dev --quiet
         else
           echo "uv not found, using pip (editable + dev extras)..."
           python -m pip install --upgrade pip
@@ -229,7 +229,7 @@ tasks:
         echo "🗑️  Uninstalling current package..."
         uv pip uninstall mecapy-sdk --quiet || true
         echo "🔄 Reinstalling with complete rebuild..."
-        uv sync --group dev --reinstall
+        uv sync --group dev --reinstall --quiet
         echo "✅ Version completely reset and synchronized!"
 
   _version:validate:
