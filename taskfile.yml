@@ -37,6 +37,7 @@ vars:
 
 # Load environment from local files when present
 dotenv: [ "dev/env.local" ]
+silent: true
 
 tasks:
   default:
@@ -79,19 +80,19 @@ tasks:
     desc: "Run unit tests only"
     deps: [ install ]
     cmds:
-      - uv run pytest -m unit
+      - uv run pytest -m unit -q
 
   test:interactive:
     desc: "Run interactive tests only"
     deps: [ install ]
     cmds:
-      - uv run pytest -m interactive
+      - uv run pytest -m interactive -q
 
   test:not_production:
     desc: "Run all tests except production"
     deps: [ install ]
     cmds:
-      - uv run pytest -m "not production"
+      - uv run pytest -m "not production" -q
 
   build:
     desc: "Build wheel and sdist using hatchling (via uv if available)"
@@ -113,16 +114,6 @@ tasks:
         echo "🔧 Installing pre-commit hooks..."
         uv run pre-commit install
         echo "✅ Pre-commit hooks installed!"
-        echo ""
-        echo "📋 Configured hooks:"
-        echo "  • ruff-format - Automatic code formatting"
-        echo "  • ruff - Auto-fix linting issues"
-        echo "  • check-yaml - Validate YAML files"
-        echo "  • check-toml - Validate TOML files"
-        echo "  • check-merge-conflict - Detect merge conflicts"
-        echo "  • check-case-conflict - Detect case conflicts"
-        echo ""
-        echo "💡 From now on, every commit will automatically run 'task format' and other checks!"
 
   precommit:run:
     desc: "Run pre-commit hooks on all files"
@@ -135,12 +126,6 @@ tasks:
     deps: [ install ]
     cmds:
       - uv run pre-commit autoupdate
-
-  precommit:format-only:
-    desc: "Run only formatting hooks (ruff-format) without strict linting"
-    deps: [ install ]
-    cmds:
-      - uv run pre-commit run ruff-format --all-files
 
   # Package publication helpers
   publish:test:
@@ -172,6 +157,11 @@ tasks:
         echo "Installing dependencies..."
         uv sync --group dev
         echo "✅ Environment initialized successfully!"
+        if ! command -v task >/dev/null 2>&1; then
+          echo "Installing task..."
+          sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d
+        fi
+        task precommit:install:
 
   version:
     desc: "Show current version information"
@@ -408,4 +398,3 @@ tasks:
     desc: "Update lock file after dependency changes"
     cmds:
       - uv lock
-      - echo "⚠️  Don't forget to commit uv.lock with your changes!"

@@ -129,7 +129,7 @@ class TestMecapyAuth:
         result = auth.fetch_oidc_config()
 
         assert result == {"issuer": "https://auth.example.com"}
-        mock_get.assert_called_once_with("https://auth.example.com/.well-known/openid_configuration")
+        mock_get.assert_called_once_with("https://auth.example.com/.well-known/openid_configuration", timeout=10)
         mock_response.raise_for_status.assert_called_once()
 
     @patch("http.server.HTTPServer")
