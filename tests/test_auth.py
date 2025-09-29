@@ -4,6 +4,7 @@ import os
 from unittest.mock import Mock, patch
 
 import pytest
+import requests
 
 from mecapy.auth import (
     Auth,
@@ -149,6 +150,51 @@ class TestServiceAccountAuth:
         with pytest.raises(NoAccessTokenError):
             auth.get_access_token()
 
+    @patch("requests.post")
+    def test_get_access_token_no_cache(self, mock_post):
+        """Test access token retrieval with no cached token."""
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            "access_token": "test-access-token",
+            "expires_in": 3600,
+            "token_type": "Bearer",
+        }
+        mock_post.return_value = mock_response
+
+        auth = ServiceAccountAuth("client-id", "client-secret")
+        auth._token_cache = None
+
+        token = auth.get_access_token()
+        assert token == "test-access-token"
+
+    def test_is_token_valid_no_cache(self):
+        """Test token validation with no cache."""
+        auth = ServiceAccountAuth("client-id", "client-secret")
+        auth._token_cache = None
+        assert not auth._is_token_valid()
+
+    def test_is_token_valid_expired(self):
+        """Test token validation with expired token."""
+        auth = ServiceAccountAuth("client-id", "client-secret")
+        auth._token_cache = {"access_token": "token", "expires_in": 30}  # Less than 60s
+        assert not auth._is_token_valid()
+
+    def test_is_token_valid_valid(self):
+        """Test token validation with valid token."""
+        auth = ServiceAccountAuth("client-id", "client-secret")
+        auth._token_cache = {"access_token": "token", "expires_in": 3600}  # More than 60s
+        assert auth._is_token_valid()
+
+    @patch("requests.post")
+    def test_fetch_token_http_error(self, mock_post):
+        """Test token fetch with HTTP error."""
+        mock_post.side_effect = requests.RequestException("Network error")
+
+        auth = ServiceAccountAuth("client-id", "client-secret")
+
+        with pytest.raises(requests.RequestException):
+            auth._fetch_token()
+
 
 @pytest.mark.unit
 class TestOAuth2Auth:
@@ -213,6 +259,61 @@ class TestOAuth2Auth:
         with pytest.raises(NoAccessTokenError):
             auth.get_access_token()
 
+    @patch("mecapy.auth.requests.get")
+    def test_fetch_oidc_config_http_error(self, mock_get):
+        """Test OIDC configuration fetch with HTTP error."""
+        mock_get.side_effect = requests.RequestException("Network error")
+
+        with pytest.raises(requests.RequestException):
+            OAuth2Auth().fetch_oidc_config()
+
+    def test_oauth2_constants(self):
+        """Test OAuth2Auth constants."""
+        assert OAuth2Auth.LOCALHOST == "127.0.0.1"
+        assert OAuth2Auth.SOCKET_TIMEOUT == 0.5
+        assert OAuth2Auth.CODE_VERIFIER_LENGTH == 48
+        assert OAuth2Auth.CODE_CHALLENGE_METHOD == "S256"
+
+    @patch("keyring.get_password")
+    def test_retrieve_stored_token_success(self, mock_get_password):
+        """Test successful token retrieval from keyring."""
+        mock_get_password.return_value = '{"access_token": "stored-token"}'
+
+        auth = OAuth2Auth.__new__(OAuth2Auth)
+        token = auth._retrieve_stored_token()
+
+        assert token == {"access_token": "stored-token"}
+
+    @patch("keyring.get_password")
+    def test_retrieve_stored_token_none(self, mock_get_password):
+        """Test token retrieval when no token stored."""
+        mock_get_password.return_value = None
+
+        auth = OAuth2Auth.__new__(OAuth2Auth)
+        token = auth._retrieve_stored_token()
+
+        assert token is None
+
+    @patch("keyring.get_password")
+    @patch("mecapy.auth.json.loads", side_effect=Exception("JSON error"))
+    def test_retrieve_stored_token_invalid_json(self, mock_json_loads, mock_get_password):
+        """Test token retrieval with invalid JSON."""
+        mock_get_password.return_value = "invalid-json"
+
+        auth = OAuth2Auth.__new__(OAuth2Auth)
+        token = auth._retrieve_stored_token()
+        assert token is None
+
+    @patch("keyring.set_password")
+    def test_store_token(self, mock_set_password):
+        """Test token storage."""
+        auth = OAuth2Auth.__new__(OAuth2Auth)
+        token_data = {"access_token": "test-token"}
+
+        auth._store_token(token_data)
+
+        mock_set_password.assert_called_once()
+
 
 @pytest.mark.unit
 class TestDefaultAuth:
@@ -263,6 +364,31 @@ class TestDefaultAuth:
         token = auth.get_access_token()
 
         assert token == "strategy-token"
+
+    @patch("mecapy.auth.OAuth2Auth")
+    def test_get_auth_strategy_oauth_failed_fallback(self, mock_oauth2_class):
+        """Test strategy fallback when OAuth2 also fails."""
+        mock_oauth2 = Mock()
+        mock_oauth2._retrieve_stored_token.side_effect = Exception("OAuth2 failed")
+        mock_oauth2_class.return_value = mock_oauth2
+
+        with patch.dict(os.environ, {}, clear=True):
+            auth = DefaultAuth()
+            strategy = auth._get_auth_strategy()
+            # Should still return the OAuth2 instance despite failure
+            assert strategy == mock_oauth2
+
+    def test_call_method(self):
+        """Test __call__ method delegates to strategy."""
+        auth = DefaultAuth()
+        mock_strategy = Mock()
+        auth._auth_strategy = mock_strategy
+
+        request = Mock()
+        result = auth(request)
+
+        mock_strategy.assert_called_once_with(request)
+        assert result == mock_strategy.return_value
 
 
 @pytest.mark.unit

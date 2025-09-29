@@ -339,3 +339,61 @@ class TestMecaPyClient:
 
             assert result.message == "Admin route accessed"
             assert result.admin_access is True
+
+    def test_del_method(self):
+        """Test __del__ method."""
+        client = MecaPyClient(api_url="https://api.example.com")
+        with patch.object(client, "close") as mock_close:
+            client.__del__()
+            mock_close.assert_called_once()
+
+    def test_del_method_with_exception(self):
+        """Test __del__ method when close raises exception."""
+        client = MecaPyClient(api_url="https://api.example.com")
+        with patch.object(client, "close", side_effect=Exception("Close error")):
+            # Should not raise exception
+            client.__del__()
+
+    def test_normalize_username_field_with_username(self, client):
+        """Test username field normalization."""
+        data = {"username": "testuser", "email": "test@example.com"}
+        result = client._normalize_username_field(data)
+        assert result["preferred_username"] == "testuser"
+        assert result["username"] == "testuser"
+
+    def test_normalize_username_field_with_preferred_username(self, client):
+        """Test username field normalization when preferred_username already exists."""
+        data = {"preferred_username": "testuser", "email": "test@example.com"}
+        result = client._normalize_username_field(data)
+        assert result["preferred_username"] == "testuser"
+
+    def test_normalize_username_field_non_dict(self, client):
+        """Test username field normalization with non-dict input."""
+        result = client._normalize_username_field("not a dict")
+        assert result == "not a dict"
+
+    def test_normalize_nested_user_info(self, client):
+        """Test nested user_info normalization."""
+        data = {"message": "Success", "user_info": {"username": "testuser", "email": "test@example.com"}}
+        result = client._normalize_nested_user_info(data)
+        assert result["user_info"]["preferred_username"] == "testuser"
+        assert result["user_info"]["username"] == "testuser"
+
+    def test_normalize_nested_user_info_no_user_info(self, client):
+        """Test nested user_info normalization without user_info."""
+        data = {"message": "Success"}
+        result = client._normalize_nested_user_info(data)
+        assert result == data
+
+    def test_handle_authentication_error(self, client):
+        """Test authentication error handling."""
+        from mecapy.exceptions import AuthenticationError
+
+        request = Mock()
+
+        # Mock auth to raise exception
+        client.auth = Mock()
+        client.auth.side_effect = Exception("Auth failed")
+
+        with pytest.raises(AuthenticationError, match="Failed to authenticate request"):
+            client._handle_authentication(request)

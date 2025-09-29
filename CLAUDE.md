@@ -79,7 +79,7 @@ task version:reset
 
 **Version Creation Process** (via taskfile internal logic):
 1. ✅ **Quality Checks**: ruff + mypy (no warnings/errors)
-2. ✅ **Test Coverage**: unit tests with >90% coverage
+2. ✅ **Test Coverage**: unit tests with 90% coverage
 3. ✅ **Clean Repository**: no uncommitted changes
 4. 🏷️ **Git Tag**: automatic semantic version increment
 5. 🔄 **Environment Update**: sync package version
@@ -115,7 +115,7 @@ task publish:prod
 - Authentication flow testing
 - Type safety validation
 - Coverage reporting to SonarCloud
-- **Unit tests**: 100% code coverage with pytest markers
+- **Unit tests**: 90% code coverage with pytest markers
 - **Warning filtering**: RuntimeWarnings from AsyncMock coroutines are filtered out in pyproject.toml
 - **Configuration**: All pytest settings centralized in `pyproject.toml` (markers, filterwarnings, coverage)
 

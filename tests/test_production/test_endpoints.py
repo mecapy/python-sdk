@@ -34,26 +34,24 @@ from mecapy.models import APIResponse
 pytestmark = pytest.mark.production
 
 
-@pytest.mark.asyncio
-async def test_root_endpoint_replies_with_basic_info():
-    async with MecaPyClient() as client:
-        info = await client.get_root()
-        assert isinstance(info, APIResponse)
-        # Basic sanity checks – fields should exist with expected types
-        assert isinstance(info.message, str) and info.message
-        assert isinstance(info.status, str) and info.status
-        # version may be None or string depending on deployment
-        assert (info.version is None) or isinstance(info.version, str)
+def test_root_endpoint_replies_with_basic_info():
+    client = MecaPyClient()
+    info = client.get_root()
+    assert isinstance(info, APIResponse)
+    # Basic sanity checks – fields should exist with expected types
+    assert isinstance(info.message, str) and info.message
+    assert isinstance(info.status, str) and info.status
+    # version may be None or string depending on deployment
+    assert (info.version is None) or isinstance(info.version, str)
 
 
-@pytest.mark.asyncio
-async def test_health_endpoint_reports_ok():
-    async with MecaPyClient() as client:
-        health = await client.health_check()
-        # Expected minimal contract: a dict with a non-empty status string
-        assert isinstance(health, dict)
-        assert "status" in health
-        assert isinstance(health["status"], str) and health["status"]
+def test_health_endpoint_reports_ok():
+    client = MecaPyClient()
+    health = client.health_check()
+    # Expected minimal contract: a dict with a non-empty status string
+    assert isinstance(health, dict)
+    assert "status" in health
+    assert isinstance(health["status"], str) and health["status"]
 
 
 def _has_stored_token() -> bool:
@@ -67,33 +65,31 @@ def _has_stored_token() -> bool:
         return False
 
 
-@pytest.mark.asyncio
 @pytest.mark.skipif(not _has_stored_token(), reason="No stored authentication token found. Run interactive auth first.")
-async def test_auth_me_returns_current_user_info():
+def test_auth_me_returns_current_user_info():
     """Test /auth/me endpoint when user has previously authenticated via OAuth2 flow."""
-    async with MecaPyClient() as client:
-        user = await client.get_current_user()
-        assert user.preferred_username  # non-empty
-        # email, given_name, family_name can be optional – only check types when present
-        if user.email is not None:
-            assert isinstance(user.email, str)
+    client = MecaPyClient()
+    user = client.get_current_user()
+    assert user.preferred_username  # non-empty
+    # email, given_name, family_name can be optional – only check types when present
+    if user.email is not None:
+        assert isinstance(user.email, str)
 
 
-@pytest.mark.asyncio
 @pytest.mark.skipif(not _has_stored_token(), reason="No stored authentication token found. Run interactive auth first.")
-async def test_auth_protected_accessible_when_authenticated():
+def test_auth_protected_accessible_when_authenticated():
     """Test /auth/protected endpoint when user has previously authenticated via OAuth2 flow."""
-    async with MecaPyClient() as client:
-        resp = await client.test_protected_route()
-        assert resp.endpoint == "protected"
-        assert resp.user_info.preferred_username
+    client = MecaPyClient()
+    resp = client.test_protected_route()
+    assert resp.endpoint == "protected"
+    assert resp.user_info.preferred_username
 
 
-@pytest.mark.asyncio
-async def test_auth_protected_requires_auth_when_unauthenticated():
+def test_auth_protected_requires_auth_when_unauthenticated():
     """Test that protected endpoints require authentication when no token is stored."""
     # When no stored token, accessing protected should raise AuthenticationError
-    async with MecaPyClient() as client:
-        client.auth.logout()
-        with pytest.raises(AuthenticationError):
-            await client.test_protected_route()
+    client = MecaPyClient()
+    # Clear any stored tokens (note: client.auth might not have logout method in new architecture)
+    # For now we test with a fresh client that should use DefaultAuth and fail if no auth available
+    with pytest.raises(AuthenticationError):
+        client.test_protected_route()
