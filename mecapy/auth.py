@@ -1,11 +1,20 @@
-"""Authentication module (Authorization Code + PKCE) for MecaPy SDK."""
+"""Authentication module for MecaPy SDK.
+
+Provides multiple authentication strategies inspired by PyGithub architecture:
+- OAuth2: Interactive browser-based authentication with PKCE
+- Token: Service account authentication with long-lived tokens
+- ServiceAccount: Client credentials flow
+- Default: Auto-detection from environment/keyring
+"""
 
 import http.server
 import json
+import os
 import secrets
 import socket
 import urllib.parse
 import webbrowser
+from abc import ABC, abstractmethod
 from typing import Any
 
 import keyring
@@ -50,14 +59,159 @@ class OAuthCallbackHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(b"<h1>Error: code not found</h1>")
 
 
-class MecapyAuth:
-    """
-    Handles authentication and token management for the MecaPy SDK.
+class AuthBase(ABC):
+    """Abstract base class for all authentication strategies."""
 
-    This class implements OAuth2 flows, token storage, and session management for
-    seamless interaction with the MecaPy system's authentication mechanism.
-    It provides methods to log in, log out, retrieve tokens, manage OAuth2 sessions,
-    and interact with the Keycloak authorization and token endpoints.
+    @abstractmethod
+    def get_access_token(self) -> str:
+        """Get a valid access token.
+
+        Returns
+        -------
+        str
+            Valid access token
+
+        Raises
+        ------
+        AuthenticationError
+            If authentication fails
+        """
+
+    def __call__(self, request: requests.PreparedRequest) -> requests.PreparedRequest:
+        """Add authentication to a requests.PreparedRequest.
+
+        Parameters
+        ----------
+        request : requests.PreparedRequest
+            The request to authenticate
+
+        Returns
+        -------
+        requests.PreparedRequest
+            The authenticated request
+        """
+        token = self.get_access_token()
+        request.headers["Authorization"] = f"Bearer {token}"
+        return request
+
+
+class TokenAuth(AuthBase):
+    """Token-based authentication using long-lived service account tokens.
+
+    This authentication method is ideal for:
+    - CI/CD pipelines
+    - Server-to-server communication
+    - Data science workflows
+    - Applications where interactive login is not practical
+
+    Parameters
+    ----------
+    token : str
+        Long-lived access token obtained from Keycloak service account
+
+    Examples
+    --------
+    >>> from mecapy import MecaPyClient, Auth
+    >>> auth = Auth.Token("your-service-account-token")
+    >>> client = MecaPyClient(auth=auth)
+    """
+
+    def __init__(self, token: str) -> None:
+        self.token = token.strip()
+        if not self.token:
+            raise ValueError("Token cannot be empty")
+
+    def get_access_token(self) -> str:
+        """Return the configured token."""
+        return self.token
+
+
+class ServiceAccountAuth(AuthBase):
+    """Service account authentication using client credentials flow.
+
+    Automatically obtains and refreshes tokens using Keycloak client credentials.
+    Suitable for long-running applications that need automatic token management.
+
+    Parameters
+    ----------
+    client_id : str
+        Keycloak client ID configured for service accounts
+    client_secret : str
+        Keycloak client secret
+    keycloak_url : str, optional
+        Keycloak server URL (default from config)
+    realm : str, optional
+        Keycloak realm (default from config)
+
+    Examples
+    --------
+    >>> from mecapy import MecaPyClient, Auth
+    >>> auth = Auth.ServiceAccount(client_id="mecapy-sdk-service", client_secret="your-client-secret")
+    >>> client = MecaPyClient(auth=auth)
+    """
+
+    def __init__(
+        self,
+        client_id: str,
+        client_secret: str,
+        keycloak_url: str | None = None,
+        realm: str | None = None,
+    ) -> None:
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.keycloak_url = keycloak_url or config.auth.issuer.rstrip("/")
+        self.realm = realm or config.auth.realm
+        self._token_cache: dict[str, Any] | None = None
+
+    def _get_token_endpoint(self) -> str:
+        """Get the token endpoint URL."""
+        return f"{self.keycloak_url}/realms/{self.realm}/protocol/openid-connect/token"
+
+    def _fetch_token(self) -> dict[str, Any]:
+        """Fetch new token using client credentials."""
+        token_url = self._get_token_endpoint()
+        data = {
+            "grant_type": "client_credentials",
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+        }
+
+        response = requests.post(token_url, data=data, timeout=10)
+        response.raise_for_status()
+        return response.json()
+
+    def _is_token_valid(self) -> bool:
+        """Check if cached token is still valid."""
+        if not self._token_cache:
+            return False
+
+        # Simple expiration check (could be enhanced with JWT parsing)
+        expires_in = self._token_cache.get("expires_in", 0)
+        # Consider token expired if less than 60 seconds remaining
+        return expires_in > 60
+
+    def get_access_token(self) -> str:
+        """Get a valid access token, refreshing if necessary."""
+        if not self._is_token_valid():
+            self._token_cache = self._fetch_token()
+
+        if self._token_cache is None:
+            raise NoAccessTokenError()
+
+        access_token = self._token_cache.get("access_token")
+        if not access_token:
+            raise NoAccessTokenError()
+
+        return str(access_token)
+
+
+class OAuth2Auth(AuthBase):
+    """
+    OAuth2 authentication with Authorization Code + PKCE flow.
+
+    This authentication method provides interactive browser-based login
+    suitable for desktop applications and development environments.
+    Tokens are stored securely in the system keyring.
 
     Attributes
     ----------
@@ -80,6 +234,13 @@ class MecapyAuth:
         set to `48`.
     CODE_CHALLENGE_METHOD : str
         PKCE code challenge method, set to `"S256"`.
+
+    Examples
+    --------
+    >>> from mecapy import MecaPyClient, Auth
+    >>> auth = Auth.OAuth2()
+    >>> client = MecaPyClient(auth=auth)
+    >>> # Browser will open for authentication
     """
 
     # Constants
@@ -153,9 +314,9 @@ class MecapyAuth:
             True if the port is available (free), False if it is currently in use.
         """
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.settimeout(MecapyAuth.SOCKET_TIMEOUT)
+            s.settimeout(OAuth2Auth.SOCKET_TIMEOUT)
             try:
-                s.bind((MecapyAuth.LOCALHOST, port))
+                s.bind((OAuth2Auth.LOCALHOST, port))
             except OSError:
                 return False
             else:
@@ -343,7 +504,7 @@ class MecapyAuth:
         else:
             return session
 
-    async def get_access_token(self) -> str:
+    def get_access_token(self) -> str:
         """
         Get access token for compatibility with existing client code.
 
@@ -362,3 +523,156 @@ class MecapyAuth:
         if not access_token:
             raise NoAccessTokenError()
         return str(access_token)
+
+    @classmethod
+    def from_env(cls) -> "OAuth2Auth":
+        """Create OAuth2Auth instance from environment variables.
+
+        Returns
+        -------
+        OAuth2Auth
+            Configured OAuth2Auth instance
+        """
+        return cls()
+
+
+class DefaultAuth(AuthBase):
+    """Default authentication that tries multiple sources in order.
+
+    Attempts authentication in this order:
+    1. Environment variable MECAPY_TOKEN
+    2. Stored OAuth2 token from keyring
+    3. Interactive OAuth2 login
+
+    This provides the most convenient experience for users while supporting
+    both interactive and programmatic use cases.
+
+    Examples
+    --------
+    >>> from mecapy import MecaPyClient, Auth
+    >>> auth = Auth.Default()
+    >>> client = MecaPyClient(auth=auth)
+    """
+
+    def __init__(self) -> None:
+        self._auth_strategy: AuthBase | None = None
+
+    def _get_auth_strategy(self) -> AuthBase:
+        """Get the appropriate authentication strategy."""
+        if self._auth_strategy:
+            return self._auth_strategy
+
+        # 1. Try environment token
+        token = os.getenv("MECAPY_TOKEN")
+        if token:
+            self._auth_strategy = TokenAuth(token)
+            return self._auth_strategy
+
+        # 2. Try OAuth2 with stored credentials
+        oauth2_auth = OAuth2Auth()
+        stored_token = oauth2_auth._retrieve_stored_token()
+        if stored_token:
+            self._auth_strategy = oauth2_auth
+            return self._auth_strategy
+
+        # 3. Fall back to interactive OAuth2
+        self._auth_strategy = oauth2_auth
+        return self._auth_strategy
+
+    def get_access_token(self) -> str:
+        """Get access token using the best available method."""
+        return self._get_auth_strategy().get_access_token()
+
+
+# PyGithub-style Auth namespace
+class Auth:
+    """Authentication methods for MecaPy SDK.
+
+    Provides static methods to create different authentication strategies,
+    following PyGithub's Auth pattern.
+
+    Examples
+    --------
+    >>> from mecapy import Auth
+    >>>
+    >>> # Token authentication
+    >>> auth = Auth.Token("your-service-account-token")
+    >>>
+    >>> # Service account with client credentials
+    >>> auth = Auth.ServiceAccount(client_id="mecapy-sdk-service", client_secret="your-secret")
+    >>>
+    >>> # Interactive OAuth2
+    >>> auth = Auth.OAuth2()
+    >>>
+    >>> # Auto-detection
+    >>> auth = Auth.Default()
+    """
+
+    @staticmethod
+    def Token(token: str) -> TokenAuth:  # noqa: N802
+        """Create token-based authentication.
+
+        Parameters
+        ----------
+        token : str
+            Long-lived access token
+
+        Returns
+        -------
+        TokenAuth
+            Token authentication instance
+        """
+        return TokenAuth(token)
+
+    @staticmethod
+    def ServiceAccount(  # noqa: N802
+        client_id: str,
+        client_secret: str,
+        keycloak_url: str | None = None,
+        realm: str | None = None,
+    ) -> ServiceAccountAuth:
+        """Create service account authentication.
+
+        Parameters
+        ----------
+        client_id : str
+            Keycloak client ID
+        client_secret : str
+            Keycloak client secret
+        keycloak_url : str, optional
+            Keycloak server URL
+        realm : str, optional
+            Keycloak realm
+
+        Returns
+        -------
+        ServiceAccountAuth
+            Service account authentication instance
+        """
+        return ServiceAccountAuth(client_id, client_secret, keycloak_url, realm)
+
+    @staticmethod
+    def OAuth2() -> OAuth2Auth:  # noqa: N802
+        """Create OAuth2 authentication.
+
+        Returns
+        -------
+        OAuth2Auth
+            OAuth2 authentication instance
+        """
+        return OAuth2Auth()
+
+    @staticmethod
+    def Default() -> DefaultAuth:  # noqa: N802
+        """Create default authentication (auto-detection).
+
+        Returns
+        -------
+        DefaultAuth
+            Default authentication instance
+        """
+        return DefaultAuth()
+
+
+# Backward compatibility alias
+MecapyAuth = OAuth2Auth

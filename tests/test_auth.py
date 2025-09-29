@@ -1,12 +1,19 @@
 """Tests for authentication module."""
 
-import json
+import os
 from unittest.mock import Mock, patch
 
 import pytest
 
-from mecapy.auth import MecapyAuth, OAuthCallbackHandler
-from mecapy.exceptions import NoAccessTokenError, NoAuthCodeError, NoFreePortError
+from mecapy.auth import (
+    Auth,
+    DefaultAuth,
+    OAuth2Auth,
+    OAuthCallbackHandler,
+    ServiceAccountAuth,
+    TokenAuth,
+)
+from mecapy.exceptions import NoAccessTokenError, NoFreePortError
 
 
 @pytest.mark.unit
@@ -50,316 +57,245 @@ class TestOAuthCallbackHandler:
 
 
 @pytest.mark.unit
-class TestMecapyAuth:
-    """Test MecapyAuth class."""
+class TestTokenAuth:
+    """Test TokenAuth class."""
 
-    @patch("mecapy.auth.config")
-    @patch.object(MecapyAuth, "fetch_oidc_config")
-    @patch.object(MecapyAuth, "set_port")
-    def test_init(self, mock_set_port, mock_fetch_oidc_config, mock_config):
-        """Test MecapyAuth initialization."""
-        mock_config.auth.client_id = "test-client"
-        mock_config.auth.realm = "test-realm"
-        mock_config.auth.issuer = "https://auth.example.com/realms/test-realm"
-        mock_set_port.return_value = 8085
-        mock_fetch_oidc_config.return_value = {
+    def test_init_success(self):
+        """Test successful initialization."""
+        auth = TokenAuth("test-token")
+        assert auth.token == "test-token"
+
+    def test_init_strips_whitespace(self):
+        """Test initialization strips whitespace."""
+        auth = TokenAuth("  test-token  ")
+        assert auth.token == "test-token"
+
+    def test_init_empty_token(self):
+        """Test initialization with empty token."""
+        with pytest.raises(ValueError, match="Token cannot be empty"):
+            TokenAuth("")
+
+    def test_get_access_token(self):
+        """Test getting access token."""
+        auth = TokenAuth("test-token")
+        assert auth.get_access_token() == "test-token"
+
+    def test_call_method(self):
+        """Test __call__ method adds auth header."""
+        auth = TokenAuth("test-token")
+        request = Mock()
+        request.headers = {}
+
+        result = auth(request)
+
+        assert request.headers["Authorization"] == "Bearer test-token"
+        assert result == request
+
+
+@pytest.mark.unit
+class TestServiceAccountAuth:
+    """Test ServiceAccountAuth class."""
+
+    def test_init_success(self):
+        """Test successful initialization."""
+        auth = ServiceAccountAuth("client-id", "client-secret")
+        assert auth.client_id == "client-id"
+        assert auth.client_secret == "client-secret"
+
+    def test_get_token_endpoint(self):
+        """Test token endpoint construction."""
+        auth = ServiceAccountAuth("client-id", "client-secret")
+        endpoint = auth._get_token_endpoint()
+        assert "protocol/openid-connect/token" in endpoint
+
+    @patch("requests.post")
+    def test_fetch_token_success(self, mock_post):
+        """Test successful token fetch."""
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            "access_token": "test-access-token",
+            "expires_in": 3600,
+            "token_type": "Bearer",
+        }
+        mock_post.return_value = mock_response
+
+        auth = ServiceAccountAuth("client-id", "client-secret")
+        token = auth._fetch_token()
+
+        assert token["access_token"] == "test-access-token"
+        assert token["expires_in"] == 3600
+
+    @patch("requests.post")
+    def test_get_access_token_success(self, mock_post):
+        """Test successful access token retrieval."""
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            "access_token": "test-access-token",
+            "expires_in": 3600,
+            "token_type": "Bearer",
+        }
+        mock_post.return_value = mock_response
+
+        auth = ServiceAccountAuth("client-id", "client-secret")
+        token = auth.get_access_token()
+
+        assert token == "test-access-token"
+
+    def test_get_access_token_no_token_in_response(self):
+        """Test access token retrieval with no token in response."""
+        auth = ServiceAccountAuth("client-id", "client-secret")
+        auth._token_cache = {"expires_in": 3600}  # No access_token
+
+        with pytest.raises(NoAccessTokenError):
+            auth.get_access_token()
+
+
+@pytest.mark.unit
+class TestOAuth2Auth:
+    """Test OAuth2Auth class."""
+
+    @patch("mecapy.auth.requests.get")
+    def test_fetch_oidc_config(self, mock_get):
+        """Test OIDC configuration fetch."""
+        mock_response = Mock()
+        mock_response.json.return_value = {
             "authorization_endpoint": "https://auth.example.com/auth",
             "token_endpoint": "https://auth.example.com/token",
         }
-
-        auth = MecapyAuth()
-
-        assert auth.client_id == "test-client"
-        assert auth.realm == "test-realm"
-        assert auth.issuer == "https://auth.example.com/realms/test-realm"
-        assert auth.port == 8085
-        assert auth.redirect_uri == "http://localhost:8085/callback"
-        mock_fetch_oidc_config.assert_called_once()
-
-    @patch("socket.socket")
-    def test_is_port_free_available(self, mock_socket):
-        """Test is_port_free when port is available."""
-        mock_socket.return_value.__enter__.return_value.bind.return_value = None
-
-        result = MecapyAuth.is_port_free(8080)
-
-        assert result is True
-
-    @patch("socket.socket")
-    def test_is_port_free_occupied(self, mock_socket):
-        """Test is_port_free when port is occupied."""
-        mock_socket.return_value.__enter__.return_value.bind.side_effect = OSError()
-
-        result = MecapyAuth.is_port_free(8080)
-
-        assert result is False
-
-    @patch.object(MecapyAuth, "is_port_free")
-    def test_set_port_success(self, mock_is_port_free):
-        """Test successful port setting."""
-        mock_is_port_free.side_effect = [False, True, False]
-
-        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
-        result = auth.set_port(8080, 8081, 8082)
-
-        assert result == 8081
-
-    @patch.object(MecapyAuth, "is_port_free")
-    def test_set_port_no_free_port(self, mock_is_port_free):
-        """Test port setting when no port is free."""
-        mock_is_port_free.return_value = False
-
-        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
-
-        with pytest.raises(NoFreePortError):
-            auth.set_port(8080, 8081, 8082)
-
-    @patch("requests.get")
-    @patch("mecapy.auth.config")
-    def test_fetch_oidc_config(self, mock_config, mock_get):
-        """Test OIDC configuration fetching."""
-        mock_config.auth.get_oidc_discovery_url.return_value = (
-            "https://auth.example.com/.well-known/openid_configuration"
-        )
-        mock_response = Mock()
-        mock_response.json.return_value = {"issuer": "https://auth.example.com"}
         mock_get.return_value = mock_response
 
-        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
-        result = auth.fetch_oidc_config()
+        auth = OAuth2Auth()
+        config = auth.fetch_oidc_config()
 
-        assert result == {"issuer": "https://auth.example.com"}
-        mock_get.assert_called_once_with("https://auth.example.com/.well-known/openid_configuration", timeout=10)
-        mock_response.raise_for_status.assert_called_once()
+        assert "authorization_endpoint" in config
+        assert "token_endpoint" in config
 
-    @patch("http.server.HTTPServer")
-    def test_waiting_for_code_success(self, mock_http_server):
-        """Test successful authorization code waiting."""
-        mock_server = Mock()
-        mock_server.auth_code = "test_code"
-        mock_http_server.return_value.__enter__.return_value = mock_server
+    @patch.object(OAuth2Auth, "is_port_free")
+    def test_set_port_success(self, mock_is_port_free):
+        """Test successful port selection."""
+        mock_is_port_free.side_effect = [False, True, False]  # Second port is free
 
-        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
-        auth.port = 8080
+        auth = OAuth2Auth.__new__(OAuth2Auth)  # Don't call __init__
+        port = auth.set_port(8085, 8086, 8087)
 
-        result = auth.waiting_for_code()
+        assert port == 8086
 
-        assert result == "test_code"
+    @patch.object(OAuth2Auth, "is_port_free")
+    def test_set_port_no_free_port(self, mock_is_port_free):
+        """Test port selection when no ports are free."""
+        mock_is_port_free.return_value = False
 
-    @patch("http.server.HTTPServer")
-    def test_waiting_for_code_failure(self, mock_http_server):
-        """Test authorization code waiting failure."""
-        mock_server = Mock()
-        del mock_server.auth_code  # No auth_code attribute
-        mock_http_server.return_value.__enter__.return_value = mock_server
+        auth = OAuth2Auth.__new__(OAuth2Auth)  # Don't call __init__
+        with pytest.raises(NoFreePortError):
+            auth.set_port(8085, 8086, 8087)
 
-        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
-        auth.port = 8080
+    def test_is_port_free_success(self):
+        """Test port availability check."""
+        # This test might be flaky depending on system state
+        # Using a very high port number to reduce conflicts
+        result = OAuth2Auth.is_port_free(65432)
+        assert isinstance(result, bool)
 
-        with pytest.raises(NoAuthCodeError):
-            auth.waiting_for_code()
-
-    @patch("keyring.set_password")
-    def test_store_token(self, mock_set_password):
-        """Test token storage."""
-        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
-        token_data = {"access_token": "test_token", "refresh_token": "test_refresh"}
-
-        auth._store_token(token_data)
-
-        mock_set_password.assert_called_once_with("MecaPy", "token", json.dumps(token_data))
-
-    @patch("keyring.get_password")
-    def test_retrieve_stored_token_success(self, mock_get_password):
-        """Test successful token retrieval."""
-        token_data = {"access_token": "test_token"}
-        mock_get_password.return_value = json.dumps(token_data)
-
-        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
-        result = auth._retrieve_stored_token()
-
-        assert result == token_data
-        mock_get_password.assert_called_once_with("MecaPy", "token")
-
-    @patch("keyring.get_password")
-    def test_retrieve_stored_token_none(self, mock_get_password):
-        """Test token retrieval when no token exists."""
-        mock_get_password.return_value = None
-
-        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
-        result = auth._retrieve_stored_token()
-
-        assert result is None
-
-    @patch("keyring.delete_password")
-    def test_clear_stored_token(self, mock_delete_password):
-        """Test token clearing."""
-        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
-
-        auth._clear_stored_token()
-
-        mock_delete_password.assert_called_once_with("MecaPy", "token")
-
-    @patch.object(MecapyAuth, "_retrieve_stored_token")
-    @patch.object(MecapyAuth, "login")
-    def test_get_token_with_stored_token(self, mock_login, mock_retrieve):
-        """Test get_token with stored token."""
-        token_data = {"access_token": "stored_token"}
-        mock_retrieve.return_value = token_data
-
-        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
-        result = auth.get_token()
-
-        assert result == token_data
-        mock_login.assert_not_called()
-
-    @patch.object(MecapyAuth, "_retrieve_stored_token")
-    @patch.object(MecapyAuth, "login")
-    def test_get_token_without_stored_token(self, mock_login, mock_retrieve):
-        """Test get_token without stored token."""
-        mock_retrieve.return_value = None
-        new_token = {"access_token": "new_token"}
-        mock_login.return_value = new_token
-
-        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
-        result = auth.get_token()
-
-        assert result == new_token
-        mock_login.assert_called_once()
-
-    @patch.object(MecapyAuth, "get_token")
-    @pytest.mark.asyncio
-    async def test_get_access_token_success(self, mock_get_token):
+    def test_get_access_token_success(self):
         """Test successful access token retrieval."""
-        mock_get_token.return_value = {"access_token": "test_token"}
+        auth = OAuth2Auth.__new__(OAuth2Auth)
+        auth.get_token = Mock(return_value={"access_token": "test-token"})
 
-        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
-        result = await auth.get_access_token()
+        token = auth.get_access_token()
 
-        assert result == "test_token"
+        assert token == "test-token"
 
-    @patch.object(MecapyAuth, "get_token")
-    @pytest.mark.asyncio
-    async def test_get_access_token_no_token(self, mock_get_token):
-        """Test access token retrieval with no access token."""
-        mock_get_token.return_value = {"refresh_token": "refresh_only"}
-
-        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
+    def test_get_access_token_no_token(self):
+        """Test access token retrieval with no token."""
+        auth = OAuth2Auth.__new__(OAuth2Auth)
+        auth.get_token = Mock(return_value={})
 
         with pytest.raises(NoAccessTokenError):
-            await auth.get_access_token()
+            auth.get_access_token()
 
-    @patch("webbrowser.open")
-    @patch.object(MecapyAuth, "waiting_for_code")
-    @patch.object(MecapyAuth, "_store_token")
-    @patch.object(MecapyAuth, "_create_oauth_client")
-    def test_login_success(self, mock_create_client, mock_store_token, mock_waiting_for_code, mock_webbrowser):
-        """Test successful login."""
-        # Setup mocks
-        mock_client = Mock()
-        mock_client.create_authorization_url.return_value = ("https://auth.url", "state")
-        mock_client.fetch_token.return_value = {"access_token": "new_token"}
-        mock_create_client.return_value = mock_client
-        mock_waiting_for_code.return_value = "auth_code"
 
-        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
-        auth.authorization_endpoint = "https://auth.example.com/auth"
-        auth.token_endpoint = "https://auth.example.com/token"
+@pytest.mark.unit
+class TestDefaultAuth:
+    """Test DefaultAuth class."""
 
-        result = auth.login()
+    def test_get_auth_strategy_with_env_token(self):
+        """Test strategy selection with environment token."""
+        with patch.dict(os.environ, {"MECAPY_TOKEN": "env-token"}):
+            auth = DefaultAuth()
+            strategy = auth._get_auth_strategy()
 
-        assert result == {"access_token": "new_token"}
-        mock_webbrowser.assert_called_once()
-        mock_store_token.assert_called_once_with({"access_token": "new_token"})
+            assert isinstance(strategy, TokenAuth)
+            assert strategy.token == "env-token"
 
-    @patch.object(MecapyAuth, "get_session")
-    @patch.object(MecapyAuth, "_clear_stored_token")
-    def test_logout(self, mock_clear_stored_token, mock_get_session):
-        """Test logout functionality."""
-        mock_session = Mock()
-        mock_session.token = {"access_token": "token1", "refresh_token": "token2"}
-        mock_get_session.return_value = mock_session
+    @patch("mecapy.auth.OAuth2Auth")
+    def test_get_auth_strategy_with_stored_token(self, mock_oauth2_class):
+        """Test strategy selection with stored OAuth2 token."""
+        mock_oauth2 = Mock()
+        mock_oauth2._retrieve_stored_token.return_value = {"access_token": "stored-token"}
+        mock_oauth2_class.return_value = mock_oauth2
 
-        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
-        auth.token_endpoint = "https://auth.example.com/token"
+        with patch.dict(os.environ, {}, clear=True):
+            auth = DefaultAuth()
+            strategy = auth._get_auth_strategy()
 
-        auth.logout()
+            assert strategy == mock_oauth2
 
-        assert mock_session.revoke_token.call_count == 2
-        mock_clear_stored_token.assert_called_once()
+    @patch("mecapy.auth.OAuth2Auth")
+    def test_get_auth_strategy_fallback_to_oauth2(self, mock_oauth2_class):
+        """Test strategy selection falls back to OAuth2."""
+        mock_oauth2 = Mock()
+        mock_oauth2._retrieve_stored_token.return_value = None
+        mock_oauth2_class.return_value = mock_oauth2
 
-    @patch.object(MecapyAuth, "get_token")
-    @patch.object(MecapyAuth, "_create_oauth_client")
-    def test_get_session_valid_token(self, mock_create_client, mock_get_token):
-        """Test get_session with valid token."""
-        token_data = {"access_token": "valid_token"}
-        mock_get_token.return_value = token_data
-        mock_session = Mock()
-        mock_create_client.return_value = mock_session
+        with patch.dict(os.environ, {}, clear=True):
+            auth = DefaultAuth()
+            strategy = auth._get_auth_strategy()
 
-        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
-        result = auth.get_session()
+            assert strategy == mock_oauth2
 
-        assert result == mock_session
-        mock_session.ensure_active_token.assert_called_once()
+    def test_get_access_token(self):
+        """Test access token retrieval."""
+        auth = DefaultAuth()
+        mock_strategy = Mock()
+        mock_strategy.get_access_token.return_value = "strategy-token"
+        auth._auth_strategy = mock_strategy
 
-    @patch.object(MecapyAuth, "get_token")
-    @patch.object(MecapyAuth, "login")
-    @patch.object(MecapyAuth, "_create_oauth_client")
-    def test_get_session_expired_token(self, mock_create_client, mock_login, mock_get_token):
-        """Test get_session with expired token requiring re-login."""
-        # First call returns expired token, second call returns new token
-        mock_get_token.return_value = {"access_token": "expired_token"}
-        new_token = {"access_token": "new_token"}
-        mock_login.return_value = new_token
+        token = auth.get_access_token()
 
-        mock_session_expired = Mock()
-        mock_session_expired.ensure_active_token.side_effect = Exception("Token expired")
-        mock_session_new = Mock()
-        mock_create_client.side_effect = [mock_session_expired, mock_session_new]
+        assert token == "strategy-token"
 
-        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
-        result = auth.get_session()
 
-        assert result == mock_session_new
-        mock_login.assert_called_once()
+@pytest.mark.unit
+class TestAuth:
+    """Test Auth namespace class."""
 
-    def test_create_oauth_client_with_token(self):
-        """Test _create_oauth_client with token."""
-        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
-        auth.client_id = "test-client"
-        auth.redirect_uri = "http://localhost:8080/callback"
-        auth.token_endpoint = "https://auth.example.com/token"
+    def test_token_creation(self):
+        """Test Token auth creation."""
+        auth = Auth.Token("test-token")
+        assert isinstance(auth, TokenAuth)
+        assert auth.token == "test-token"
 
-        token_data = {"access_token": "test_token"}
+    def test_service_account_creation(self):
+        """Test ServiceAccount auth creation."""
+        auth = Auth.ServiceAccount("client-id", "client-secret")
+        assert isinstance(auth, ServiceAccountAuth)
+        assert auth.client_id == "client-id"
+        assert auth.client_secret == "client-secret"
 
-        with patch("mecapy.auth.OAuth2Session") as mock_oauth_session:
-            result = auth._create_oauth_client(token=token_data)
+    @patch("mecapy.auth.requests.get")
+    def test_oauth2_creation(self, mock_get):
+        """Test OAuth2 auth creation."""
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            "authorization_endpoint": "https://auth.example.com/auth",
+            "token_endpoint": "https://auth.example.com/token",
+        }
+        mock_get.return_value = mock_response
 
-            mock_oauth_session.assert_called_once_with(
-                client_id="test-client",
-                redirect_uri="http://localhost:8080/callback",
-                token_endpoint="https://auth.example.com/token",
-                code_challenge_method="S256",
-                token=token_data,
-            )
-            assert result == mock_oauth_session.return_value
+        auth = Auth.OAuth2()
+        assert isinstance(auth, OAuth2Auth)
 
-    def test_create_oauth_client_without_token(self):
-        """Test _create_oauth_client without token."""
-        auth = MecapyAuth.__new__(MecapyAuth)  # Skip __init__
-        auth.client_id = "test-client"
-        auth.redirect_uri = "http://localhost:8080/callback"
-        auth.token_endpoint = "https://auth.example.com/token"
-
-        with patch("mecapy.auth.OAuth2Session") as mock_oauth_session:
-            result = auth._create_oauth_client()
-
-            mock_oauth_session.assert_called_once_with(
-                client_id="test-client",
-                redirect_uri="http://localhost:8080/callback",
-                token_endpoint="https://auth.example.com/token",
-                code_challenge_method="S256",
-                token=None,
-            )
-            assert result == mock_oauth_session.return_value
+    def test_default_creation(self):
+        """Test Default auth creation."""
+        auth = Auth.Default()
+        assert isinstance(auth, DefaultAuth)

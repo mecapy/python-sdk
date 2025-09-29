@@ -1,13 +1,12 @@
 """Main client for MecaPy SDK."""
 
-import inspect
 from pathlib import Path
 from typing import Any, BinaryIO
 
-import httpx
+import requests
 
 from . import version
-from .auth import MecapyAuth
+from .auth import AuthBase, DefaultAuth
 from .config import config
 from .exceptions import (
     AuthenticationError,
@@ -26,33 +25,109 @@ from .models import (
 
 
 class MecaPyClient:
-    """Main client for interacting with MecaPy API."""
+    """Main client for interacting with MecaPy API.
 
-    def __init__(self, api_url: str | None = None, timeout: float | None = None):
-        self.auth = MecapyAuth()
+    Now uses synchronous requests for better compatibility with data science workflows.
+
+    Parameters
+    ----------
+    api_url : str, optional
+        MecaPy API base URL (default from config)
+    auth : AuthBase, optional
+        Authentication strategy (default: auto-detection)
+    timeout : float, optional
+        Request timeout in seconds (default from config)
+
+    Examples
+    --------
+    >>> from mecapy import MecaPyClient, Auth
+    >>>
+    >>> # Simple usage with auto-detection
+    >>> client = MecaPyClient()
+    >>>
+    >>> # With token authentication
+    >>> auth = Auth.Token("your-service-account-token")
+    >>> client = MecaPyClient(auth=auth)
+    >>>
+    >>> # With service account
+    >>> auth = Auth.ServiceAccount(client_id="mecapy-sdk-service", client_secret="your-secret")
+    >>> client = MecaPyClient(auth=auth)
+    """
+
+    def __init__(self, api_url: str | None = None, auth: AuthBase | None = None, timeout: float | None = None):
+        self.auth = auth or DefaultAuth()
         self.api_url = (api_url or config.api_url).rstrip("/")
         self.timeout = timeout or config.timeout
-        # Create HTTP client
-        self._client = httpx.AsyncClient(timeout=self.timeout, headers={"User-Agent": f"mecapy-sdk/{version}"})
+        # Create HTTP session
+        self._session = requests.Session()
+        self._session.headers.update({"User-Agent": f"mecapy-sdk/{version}"})
 
-    async def __aenter__(self):  # type: ignore
-        """Async context manager entry."""
+    def __enter__(self):  # type: ignore
+        """Context manager entry (optional)."""
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):  # type: ignore
-        """Async context manager exit."""
-        await self.close()
+    def __exit__(self, exc_type, exc_val, exc_tb):  # type: ignore
+        """Context manager exit (optional)."""
+        self.close()
 
-    async def close(self) -> None:
-        """Close the HTTP client."""
-        await self._client.aclose()
+    def close(self) -> None:
+        """Close the HTTP session (optional cleanup)."""
+        self._session.close()
 
-    async def _json(self, response: httpx.Response) -> dict[str, Any]:
-        """Return JSON from response, awaiting if caller provide a coroutine."""
-        data = response.json()
-        if inspect.isawaitable(data):
-            return await data
-        return data
+    def __del__(self) -> None:
+        """Cleanup session on garbage collection."""
+        try:
+            self.close()
+        except Exception:
+            # Ignore errors during cleanup
+            pass
+
+    @classmethod
+    def from_env(cls, api_url: str | None = None, timeout: float | None = None) -> "MecaPyClient":
+        """Create client with default authentication from environment.
+
+        Backward compatibility method.
+
+        Parameters
+        ----------
+        api_url : str, optional
+            MecaPy API base URL
+        timeout : float, optional
+            Request timeout
+
+        Returns
+        -------
+        MecaPyClient
+            Configured client instance
+        """
+        return cls(api_url=api_url, timeout=timeout)
+
+    @classmethod
+    def from_token(cls, token: str, api_url: str | None = None, timeout: float | None = None) -> "MecaPyClient":
+        """Create client with token authentication.
+
+        Parameters
+        ----------
+        token : str
+            Long-lived access token
+        api_url : str, optional
+            MecaPy API base URL
+        timeout : float, optional
+            Request timeout
+
+        Returns
+        -------
+        MecaPyClient
+            Configured client instance
+        """
+        from .auth import Auth
+
+        auth = Auth.Token(token)
+        return cls(api_url=api_url, auth=auth, timeout=timeout)
+
+    def _json(self, response: requests.Response) -> dict[str, Any]:
+        """Return JSON from response."""
+        return response.json()
 
     def _normalize_username_field(self, data: dict) -> dict:
         """Normalize username field in response data."""
@@ -72,32 +147,29 @@ class MecaPyClient:
                 data["user_info"] = ui
         return data
 
-    async def _handle_authentication(self, headers: dict[str, str]) -> None:
-        """Add authentication header if required."""
+    def _handle_authentication(self, request: requests.PreparedRequest) -> None:
+        """Add authentication to request if required."""
         try:
-            token = await self.auth.get_access_token()
+            self.auth(request)
         except Exception as e:
-            raise AuthenticationError(f"Failed to get access token: {str(e)}") from e
-        else:
-            headers["Authorization"] = f"Bearer {token}"
+            raise AuthenticationError(f"Failed to authenticate request: {str(e)}") from e
 
-    def _handle_response_errors(self, response: httpx.Response) -> None:  # noqa: C901
+    def _handle_response_errors(self, response: requests.Response) -> None:  # noqa: C901
         """Handle HTTP response errors based on status codes."""
-        match response.status_code:
-            case 401:
-                raise AuthenticationError("Authentication failed")
-            case 403:
-                raise AuthenticationError("Access forbidden")
-            case 404:
-                raise NotFoundError("Resource not found")
-            case 422:
-                raise ValidationError("Request validation failed", response.status_code, response.json())
-            case code if 400 <= code < 500:
-                raise ValidationError(f"Client error: {response.text}", response.status_code)
-            case code if code >= 500:
-                raise ServerError(f"Server error: {response.text}", response.status_code)
+        if response.status_code == 401:
+            raise AuthenticationError("Authentication failed")
+        if response.status_code == 403:
+            raise AuthenticationError("Access forbidden")
+        if response.status_code == 404:
+            raise NotFoundError("Resource not found")
+        if response.status_code == 422:
+            raise ValidationError("Request validation failed", response.status_code, response.json())
+        if 400 <= response.status_code < 500:
+            raise ValidationError(f"Client error: {response.text}", response.status_code)
+        if response.status_code >= 500:
+            raise ServerError(f"Server error: {response.text}", response.status_code)
 
-    async def _prepare_file_upload(self, file: str | Path | BinaryIO, filename: str | None) -> tuple[str, bytes]:
+    def _prepare_file_upload(self, file: str | Path | BinaryIO, filename: str | None) -> tuple[str, bytes]:
         """Prepare file for upload, returning filename and content."""
         if isinstance(file, (str, Path)):
             file_path = Path(file)
@@ -117,9 +189,7 @@ class MecaPyClient:
 
         return filename, file_content
 
-    async def _make_request(
-        self, method: str, endpoint: str, authenticated: bool = True, **kwargs: Any
-    ) -> httpx.Response:
+    def _make_request(self, method: str, endpoint: str, authenticated: bool = True, **kwargs: Any) -> requests.Response:
         """
         Make an HTTP request to the MecaPy API.
 
@@ -141,7 +211,7 @@ class MecaPyClient:
 
         Returns
         -------
-        httpx.Response
+        requests.Response
             The HTTP response object returned from the request.
 
         Raises
@@ -160,21 +230,24 @@ class MecaPyClient:
             If a network-related issue prevents the request from completing.
         """
         url = f"{self.api_url}{endpoint}"
-        headers = kwargs.pop("headers", {})
 
-        # Add authentication header if required
+        # Prepare request
+        request = requests.Request(method=method, url=url, **kwargs)
+        prepared = self._session.prepare_request(request)
+
+        # Add authentication if required
         if authenticated and self.auth:
-            await self._handle_authentication(headers)
+            self._handle_authentication(prepared)
 
         try:
-            response = await self._client.request(method=method, url=url, headers=headers, **kwargs)
-        except httpx.RequestError as e:
+            response = self._session.send(prepared, timeout=self.timeout)
+        except requests.RequestException as e:
             raise NetworkError(f"Network error: {str(e)}") from e
         else:
             self._handle_response_errors(response)
             return response
 
-    async def get_root(self) -> APIResponse:
+    def get_root(self) -> APIResponse:
         """
         Get API root information.
 
@@ -182,11 +255,11 @@ class MecaPyClient:
         -------
             API response with basic information
         """
-        response = await self._make_request("GET", "/", authenticated=False)
-        data = await self._json(response)
+        response = self._make_request("GET", "/", authenticated=False)
+        data = self._json(response)
         return APIResponse(**data)
 
-    async def health_check(self) -> dict[str, str]:
+    def health_check(self) -> dict[str, str]:
         """
         Check API health status.
 
@@ -194,10 +267,10 @@ class MecaPyClient:
         -------
             Health status dictionary
         """
-        response = await self._make_request("GET", "/health", authenticated=False)
-        return await self._json(response)
+        response = self._make_request("GET", "/health", authenticated=False)
+        return self._json(response)
 
-    async def get_current_user(self) -> UserInfo:
+    def get_current_user(self) -> UserInfo:
         """
         Get information about the currently authenticated user.
 
@@ -209,13 +282,13 @@ class MecaPyClient:
         ------
             AuthenticationError: If not authenticated
         """
-        response = await self._make_request("GET", "/auth/me")
-        data = await self._json(response)
+        response = self._make_request("GET", "/auth/me")
+        data = self._json(response)
         # Normalize production variants: some deployments may return `username` instead of `preferred_username`
         data = self._normalize_username_field(data)
         return UserInfo(**data)
 
-    async def test_protected_route(self) -> ProtectedResponse:
+    def test_protected_route(self) -> ProtectedResponse:
         """
         Test protected route access.
 
@@ -227,13 +300,13 @@ class MecaPyClient:
         ------
             AuthenticationError: If not authenticated
         """
-        response = await self._make_request("GET", "/auth/protected")
-        data = await self._json(response)
+        response = self._make_request("GET", "/auth/protected")
+        data = self._json(response)
         # Normalize production variants for nested user_info
         data = self._normalize_nested_user_info(data)
         return ProtectedResponse(**data)
 
-    async def test_admin_route(self) -> AdminResponse:
+    def test_admin_route(self) -> AdminResponse:
         """
         Test admin route access.
 
@@ -245,12 +318,12 @@ class MecaPyClient:
         ------
             AuthenticationError: If not authenticated or not admin
         """
-        response = await self._make_request("GET", "/auth/admin")
-        data = await self._json(response)
+        response = self._make_request("GET", "/auth/admin")
+        data = self._json(response)
         return AdminResponse(**data)
 
     # Upload endpoints
-    async def upload_archive(self, file: str | Path | BinaryIO, filename: str | None = None) -> UploadResponse:
+    def upload_archive(self, file: str | Path | BinaryIO, filename: str | None = None) -> UploadResponse:
         """
         Upload a ZIP archive to the API.
 
@@ -267,11 +340,11 @@ class MecaPyClient:
             ValidationError: If file is not a ZIP file
             AuthenticationError: If not authenticated
         """
-        filename, file_content = await self._prepare_file_upload(file, filename)
+        filename, file_content = self._prepare_file_upload(file, filename)
 
         # Prepare multipart form data
         files = {"file": (filename, file_content, "application/zip")}
 
-        response = await self._make_request("POST", "/upload/archive", files=files)
-        data = await self._json(response)
+        response = self._make_request("POST", "/upload/archive", files=files)
+        data = self._json(response)
         return UploadResponse(**data)

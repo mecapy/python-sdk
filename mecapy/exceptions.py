@@ -61,5 +61,5 @@ class NoAuthCodeError(AuthenticationError):
 class NoAccessTokenError(AuthenticationError):
     """Raised when no access token is found in token response."""
 
-    def __init__(self) -> None:
-        super().__init__("No access token found in token response")
+    def __init__(self, message: str = "No access token found in token response") -> None:
+        super().__init__(message)

@@ -32,31 +32,43 @@ pip install mecapy-sdk
 ### Basic Usage
 
 ```python
-import asyncio
 from mecapy import MecaPyClient
 
-async def main():
-    # Simple usage with default production URLs
-    # Only credentials are needed for authentication
-    async with MecaPyClient.from_env() as client:
-        # Get current user info
-        user = await client.get_current_user()
-        print(f"Hello, {user.preferred_username}!")
+# Simple usage with default authentication (auto-detection)
+client = MecaPyClient()
 
-        # Upload a file
-        upload_result = await client.upload_archive("my-archive.zip")
-        print(f"Uploaded: {upload_result.uploaded_filename}")
+# Get current user info
+user = client.get_current_user()
+print(f"Hello, {user.preferred_username}!")
 
-asyncio.run(main())
+# Upload a file
+upload_result = client.upload_archive("my-archive.zip")
+print(f"Uploaded: {upload_result.uploaded_filename}")
 ```
 
-### Using Environment Variables
+### Token Authentication (Recommended for CI/CD)
 
 ```python
-import asyncio
+from mecapy import MecaPyClient, Auth
+
+# Using service account token
+auth = Auth.Token("your-long-lived-service-account-token")
+client = MecaPyClient(auth=auth)
+
+# Get current user info
+user = client.get_current_user()
+print(f"Authenticated as: {user.preferred_username}")
+```
+
+### Environment Variables
+
+```python
 from mecapy import MecaPyClient
 
-# Set environment variables (only credentials required):
+# Set environment variables:
+# MECAPY_TOKEN=your-service-account-token  # For token auth
+#
+# OR for OAuth2:
 # MECAPY_USERNAME=your-username
 # MECAPY_PASSWORD=your-password
 #
@@ -64,18 +76,16 @@ from mecapy import MecaPyClient
 # MECAPY_API_URL=https://your-api.company.com
 # MECAPY_KEYCLOAK_URL=https://your-auth.company.com
 
-async def main():
-    # Create client - uses production URLs by default
-    async with MecaPyClient.from_env() as client:
-        # Check API health
-        health = await client.health_check()
-        print(f"API Status: {health['status']}")
+# Create client - uses auto-detection
+client = MecaPyClient()
 
-        # Get API info
-        info = await client.get_root()
-        print(f"API Version: {info.version}")
+# Check API health
+health = client.health_check()
+print(f"API Status: {health['status']}")
 
-asyncio.run(main())
+# Get API info
+info = client.get_root()
+print(f"API Version: {info.version}")
 ```
 
 ## Configuration
@@ -85,20 +95,28 @@ asyncio.run(main())
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `MECAPY_API_URL` | MecaPy API base URL | `https://api.mecapy.com` |
+| `MECAPY_TOKEN` | Service account token | None (triggers auto-detection) |
 | `MECAPY_KEYCLOAK_URL` | Keycloak server URL | `https://auth.mecapy.com` |
 | `MECAPY_REALM` | Keycloak realm | `mecapy` |
 | `MECAPY_CLIENT_ID` | Keycloak client ID | `mecapy-api-public` |
-| `MECAPY_USERNAME` | Username for auth | Required for authentication |
-| `MECAPY_PASSWORD` | Password for auth | Required for authentication |
+| `MECAPY_USERNAME` | Username for OAuth2 | None |
+| `MECAPY_PASSWORD` | Password for OAuth2 | None |
 | `MECAPY_TIMEOUT` | Request timeout (seconds) | `30.0` |
 
-**🎯 For most users**: Only set `MECAPY_USERNAME` and `MECAPY_PASSWORD`. The SDK uses MecaPy production URLs by default.
+**🎯 For most users**: Set `MECAPY_TOKEN` with your service account token for the simplest experience.
+
+**🔄 For interactive use**: Set `MECAPY_USERNAME` and `MECAPY_PASSWORD` for OAuth2 browser-based login.
 
 **🏢 For on-premise installations**: Override `MECAPY_API_URL` and `MECAPY_KEYCLOAK_URL` as needed.
 
 ### .env File Support
 
-**Minimal .env file (production):**
+**Minimal .env file (token auth):**
+```bash
+MECAPY_TOKEN=your-service-account-token
+```
+
+**OAuth2 .env file:**
 ```bash
 MECAPY_USERNAME=your-username
 MECAPY_PASSWORD=your-password
@@ -110,25 +128,20 @@ MECAPY_API_URL=https://your-api.company.com
 MECAPY_KEYCLOAK_URL=https://your-auth.company.com
 MECAPY_REALM=mecapy
 MECAPY_CLIENT_ID=mecapy-api-public
-MECAPY_USERNAME=your-username
-MECAPY_PASSWORD=your-password
+MECAPY_TOKEN=your-service-account-token
 ```
 
 Then load it:
 
 ```python
-import asyncio
 from dotenv import load_dotenv
 from mecapy import MecaPyClient
 
 load_dotenv()
 
-async def main():
-    async with MecaPyClient.from_env() as client:
-        user = await client.get_current_user()
-        print(f"Authenticated as: {user.preferred_username}")
-
-asyncio.run(main())
+client = MecaPyClient()
+user = client.get_current_user()
+print(f"Authenticated as: {user.preferred_username}")
 ```
 
 ## API Reference
@@ -152,17 +165,19 @@ asyncio.run(main())
 - `get_root() -> APIResponse` - Get API information
 - `health_check() -> Dict[str, str]` - Check API health
 
-### MecapyAuth
+### Authentication Classes
 
-#### Methods
+#### Auth (Namespace)
 
-- `set_credentials(username, password)` - Set authentication credentials
-- `get_access_token() -> str` - Get valid access token (with auto-refresh)
-- `logout()` - Clear stored tokens
+- `Auth.Token(token: str)` - Create token-based authentication
+- `Auth.ServiceAccount(client_id, client_secret)` - Create service account authentication
+- `Auth.OAuth2()` - Create interactive OAuth2 authentication
+- `Auth.Default()` - Create auto-detection authentication
 
-#### Class Methods
+#### MecaPyClient Class Methods
 
-- `from_env() -> MecapyAuth` - Create instance from environment variables
+- `MecaPyClient.from_env()` - Create client with auto-detection
+- `MecaPyClient.from_token(token)` - Create client with token authentication
 
 ## Error Handling
 
@@ -178,20 +193,21 @@ from mecapy.exceptions import (
     NetworkError
 )
 
-async def handle_errors():
-    async with MecaPyClient.from_env() as client:
-        try:
-            user = await client.get_current_user()
-        except AuthenticationError:
-            print("Authentication failed - check credentials")
-        except ValidationError as e:
-            print(f"Validation failed: {e.message}")
-        except NotFoundError:
-            print("Resource not found")
-        except ServerError as e:
-            print(f"Server error: {e.status_code}")
-        except NetworkError:
-            print("Network connection failed")
+client = MecaPyClient()
+
+try:
+    user = client.get_current_user()
+    print(f"Hello, {user.preferred_username}!")
+except AuthenticationError:
+    print("Authentication failed - check credentials")
+except ValidationError as e:
+    print(f"Validation failed: {e.message}")
+except NotFoundError:
+    print("Resource not found")
+except ServerError as e:
+    print(f"Server error: {e.status_code}")
+except NetworkError:
+    print("Network connection failed")
 ```
 
 ## Data Models
@@ -225,78 +241,81 @@ class UploadResponse(BaseModel):
 ### File Upload
 
 ```python
-import asyncio
 from pathlib import Path
-from mecapy import MecaPyClient
+from mecapy import MecaPyClient, Auth
 
-async def upload_file():
-    async with MecaPyClient.from_env() as client:
-        # Upload from file path
-        result = await client.upload_archive("data.zip")
-        print(f"File uploaded: {result.uploaded_filename}")
+# Using token authentication
+auth = Auth.Token("your-service-account-token")
+with MecaPyClient(auth=auth) as client:
+    # Upload from file path
+    result = client.upload_archive("data.zip")
+    print(f"File uploaded: {result.uploaded_filename}")
 
-        # Upload from Path object
-        file_path = Path("archive.zip")
-        result = await client.upload_archive(file_path)
-        print(f"MD5: {result.md5}")
+    # Upload from Path object
+    file_path = Path("archive.zip")
+    result = client.upload_archive(file_path)
+    print(f"MD5: {result.md5}")
 
-        # Upload from file-like object
-        with open("data.zip", "rb") as f:
-            result = await client.upload_archive(f, filename="data.zip")
-            print(f"Size: {result.size} bytes")
-
-asyncio.run(upload_file())
+    # Upload from file-like object
+    with open("data.zip", "rb") as f:
+        result = client.upload_archive(f, filename="data.zip")
+        print(f"Size: {result.size} bytes")
 ```
 
 ### User Management
 
 ```python
-import asyncio
-from mecapy import MecaPyClient
+from mecapy import MecaPyClient, Auth
+from mecapy.exceptions import AuthenticationError
 
-async def user_info():
-    async with MecaPyClient.from_env() as client:
-        # Get current user
-        user = await client.get_current_user()
-        print(f"Username: {user.preferred_username}")
-        print(f"Email: {user.email}")
-        print(f"Roles: {', '.join(user.roles)}")
+# Using auto-detection (will try MECAPY_TOKEN, then OAuth2)
+client = MecaPyClient()
 
-        # Test role-based access
-        try:
-            admin_response = await client.test_admin_route()
-            print("Admin access granted!")
-        except AuthenticationError:
-            print("Admin access denied")
+# Get current user
+user = client.get_current_user()
+print(f"Username: {user.preferred_username}")
+print(f"Email: {user.email}")
+print(f"Roles: {', '.join(user.roles)}")
 
-asyncio.run(user_info())
+# Test role-based access
+try:
+    admin_response = client.test_admin_route()
+    print("Admin access granted!")
+except AuthenticationError:
+    print("Admin access denied")
 ```
 
-### Custom Authentication
+### Advanced Authentication Examples
 
 ```python
-import asyncio
-from mecapy import MecaPyClient
-from mecapy.auth import MecapyAuth
+from mecapy import MecaPyClient, Auth
 
+# 1. Token authentication (simplest for CI/CD)
+auth = Auth.Token("your-service-account-token")
+client = MecaPyClient(auth=auth)
 
-async def custom_auth():
-    # Create auth with custom settings
-    auth = MecapyAuth(
-        keycloak_url="https://custom-auth.example.com",
-        realm="custom-realm",
-        client_id="custom-client"
-    )
+# 2. Service account with client credentials (automatic token refresh)
+auth = Auth.ServiceAccount(
+    client_id="mecapy-sdk-service",
+    client_secret="your-client-secret"
+)
+client = MecaPyClient(auth=auth)
 
-    # Set credentials dynamically
-    auth.set_credentials("user@example.com", "secure-password")
+# 3. Interactive OAuth2 (browser-based login)
+auth = Auth.OAuth2()
+client = MecaPyClient(auth=auth)  # Will open browser for login
 
-    async with MecaPyClient("https://api.example.com", auth=auth) as client:
-        user = await client.get_current_user()
-        print(f"Authenticated: {user.preferred_username}")
+# 4. Custom Keycloak configuration
+auth = Auth.ServiceAccount(
+    client_id="custom-client",
+    client_secret="custom-secret",
+    keycloak_url="https://custom-auth.example.com",
+    realm="custom-realm"
+)
+client = MecaPyClient("https://api.example.com", auth=auth)
 
-
-asyncio.run(custom_auth())
+user = client.get_current_user()
+print(f"Authenticated: {user.preferred_username}")
 ```
 
 ## Development
@@ -306,34 +325,38 @@ asyncio.run(custom_auth())
 ```bash
 git clone https://github.com/mecapy/python-sdk.git
 cd python-sdk
-pip install -e ".[dev]"
+
+# Initialize development environment
+task init
+
+# Or manually with uv
+uv sync --group dev
 ```
 
 ### Running Tests
 
 ```bash
+# Run unit tests
+task test:unit
+
 # Run all tests
-pytest
+task test
 
-# Run with coverage
-pytest --cov=mecapy
-
-# Run specific test types
-pytest -m unit
-pytest -m integration
+# Run interactive tests
+task test:interactive
 ```
 
 ### Code Quality
 
 ```bash
-# Format code
-ruff format
+# Format code and fix linting
+task format
 
-# Lint code
-ruff check
+# Run all quality checks (ruff + mypy)
+task check
 
-# Type checking
-mypy mecapy
+# Build package
+task build
 ```
 
 ## License
