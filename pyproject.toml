@@ -51,6 +51,9 @@ dev = [
     "types-requests>=2.31.0",
 ]
 
+[project.scripts]
+mecapy-test = "mecapy.testing.json_runner:main"
+
 [project.urls]
 Homepage = "https://github.com/mecapy/python-sdk"
 Repository = "https://github.com/mecapy/python-sdk"

@@ -20,6 +20,7 @@ Python SDK for MecaPy API - A clean, simple, and robust client library.
 - 🛡️ **Error Handling** - Comprehensive exception handling
 - 🧪 **Well Tested** - Extensive test coverage
 - 📚 **Environment Variables** - Easy configuration management
+- 🗂️ **JSON Test Runner** - Generic JSON-driven test runner for MecaPy packages (`mecapy.testing`)
 
 ## Installation
 
@@ -317,6 +318,71 @@ client = MecaPyClient("https://api.example.com", auth=auth)
 user = client.get_current_user()
 print(f"Authenticated: {user.preferred_username}")
 ```
+
+## JSON Test Runner (`mecapy.testing`)
+
+Le SDK inclut un test runner générique JSON-driven permettant aux experts métier d'écrire des cas de test sans code Python.
+
+### Principe
+
+Les cas de test sont définis dans des fichiers `test_*.json`. Le runner charge ces fichiers, appelle dynamiquement les fonctions Python référencées et compare les résultats aux valeurs attendues.
+
+```json
+{
+  "handler": "handler:ma_fonction",
+  "description": "Tests de ma fonction de calcul",
+  "test_cases": [
+    {
+      "name": "cas_nominal",
+      "description": "Cas nominal avec valeurs standard",
+      "request": {
+        "param1": { "a": 10, "b": 1.5 },
+        "param2": { "x": 100 }
+      },
+      "expected": {
+        "resultat": 42.0,
+        "valide": true
+      },
+      "tolerance": { "numeric": 0.1 }
+    }
+  ]
+}
+```
+
+### Utilisation en ligne de commande
+
+```bash
+# Lancer les tests du répertoire tests/
+mecapy-test tests/
+
+# Avec un répertoire de module à ajouter au sys.path (sinon déduit automatiquement)
+mecapy-test tests/ --sys-path /path/to/my/handler
+```
+
+### Utilisation programmatique
+
+```python
+from pathlib import Path
+from mecapy.testing import TestRunner
+
+runner = TestRunner(Path("tests"))
+runner.run_all_tests()  # Quitte avec code 0 (succès) ou 1 (échec)
+```
+
+### Fonctionnalités
+
+- **Import dynamique** : le module Python est importé à la volée depuis la clé `handler` du JSON (`"module:fonction"`)
+- **Comparaison partielle** : seules les clés présentes dans `expected` sont vérifiées
+- **Tolérance configurable** : chaque cas de test définit sa propre tolérance numérique
+- **CI/CD-ready** : code de sortie `0` (succès) ou `1` (échec)
+- **Affichage coloré** : résumé avec statistiques et détail des échecs
+
+### Format du handler
+
+| Format | Exemple | Description |
+|--------|---------|-------------|
+| `module:fonction` | `handler:calculer` | Fonction au niveau module |
+| `module.Classe:methode` | `handler.Calc:run` | Méthode de classe |
 
 ## Development
 
