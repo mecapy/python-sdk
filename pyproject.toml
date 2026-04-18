@@ -157,7 +157,7 @@ select = [
     "NPY", # Numpy specific
     "PD", # Panda
 ]
-ignore = ["TRY003"]
+ignore = ["TRY003", "D105"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"

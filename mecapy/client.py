@@ -1,7 +1,12 @@
 """Main client for MecaPy SDK."""
 
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Any, BinaryIO
+from typing import TYPE_CHECKING, Any, BinaryIO
+
+if TYPE_CHECKING:
+    from .packages import Package
 
 import requests
 
@@ -78,12 +83,11 @@ class MecaPyClient:
         """Cleanup session on garbage collection."""
         try:
             self.close()
-        except Exception:
-            # Ignore errors during cleanup
+        except Exception:  # noqa: S110
             pass
 
     @classmethod
-    def from_env(cls, api_url: str | None = None, timeout: float | None = None) -> "MecaPyClient":
+    def from_env(cls, api_url: str | None = None, timeout: float | None = None) -> MecaPyClient:
         """Create client with default authentication from environment.
 
         Backward compatibility method.
@@ -103,7 +107,7 @@ class MecaPyClient:
         return cls(api_url=api_url, timeout=timeout)
 
     @classmethod
-    def from_token(cls, token: str, api_url: str | None = None, timeout: float | None = None) -> "MecaPyClient":
+    def from_token(cls, token: str, api_url: str | None = None, timeout: float | None = None) -> MecaPyClient:
         """Create client with token authentication.
 
         Parameters
@@ -321,6 +325,40 @@ class MecaPyClient:
         response = self._make_request("GET", "/auth/admin")
         data = self._json(response)
         return AdminResponse(**data)
+
+    def load(self, name_or_id: str) -> Package:
+        """Load a deployed package by name or ID.
+
+        Parameters
+        ----------
+        name_or_id : str
+            Package name (e.g. ``"e25-030-1"``) or UUID.
+
+        Returns
+        -------
+        Package
+            Package object whose functions are accessible as attributes.
+
+        Raises
+        ------
+        NotFoundError
+            If no package with that name or ID exists.
+
+        Examples
+        --------
+        >>> pkg = client.load("e25-030-1")
+        >>> result = pkg.min_preload(bolt=..., assembly=..., loads=..., tightening=...)
+        """
+        from .packages import Package
+
+        resp = self._make_request("GET", "/packages")
+        packages = resp.json().get("packages", [])
+
+        for pkg in packages:
+            if pkg.get("id") == name_or_id or pkg.get("name") == name_or_id:
+                return Package(package_id=pkg["id"], name=pkg["name"], client=self)
+
+        raise NotFoundError(f"Package '{name_or_id}' not found")
 
     # Upload endpoints
     def upload_archive(self, file: str | Path | BinaryIO, filename: str | None = None) -> UploadResponse:

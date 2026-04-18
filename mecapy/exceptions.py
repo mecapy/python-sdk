@@ -63,3 +63,7 @@ class NoAccessTokenError(AuthenticationError):
 
     def __init__(self, message: str = "No access token found in token response") -> None:
         super().__init__(message)
+
+
+class ExecutionError(MecaPyError):
+    """Raised when a remote function execution fails on the server side."""

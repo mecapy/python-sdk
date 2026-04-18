@@ -10,7 +10,9 @@ except importlib.metadata.PackageNotFoundError:
 from .auth import Auth, AuthBase, DefaultAuth, MecapyAuth, OAuth2Auth, ServiceAccountAuth, TokenAuth
 from .client import MecaPyClient
 from .config import Config
+from .exceptions import ExecutionError
 from .models import AdminResponse, APIResponse, ProtectedResponse, UploadResponse, UserInfo
+from .packages import Function, Job, Package
 
 __all__ = [
     "MecaPyClient",
@@ -27,5 +29,9 @@ __all__ = [
     "ProtectedResponse",
     "AdminResponse",
     "UploadResponse",
+    "ExecutionError",
+    "Package",
+    "Function",
+    "Job",
     "version",
 ]
