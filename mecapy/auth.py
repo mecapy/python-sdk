@@ -415,10 +415,18 @@ class OAuth2Auth(AuthBase):
         Returns
         -------
         dict | None
-            Token data if found, None otherwise
+            Token data if found, None otherwise (also None when the stored
+            blob is not valid JSON — keyring corruption is treated as "no
+            token" so the caller falls back to a fresh login instead of
+            crashing).
         """
         token_as_str = keyring.get_password(self.KEYRING_SERVICE, self.KEYRING_TOKEN_KEY)
-        return json.loads(token_as_str) if token_as_str else None
+        if not token_as_str:
+            return None
+        try:
+            return json.loads(token_as_str)
+        except Exception:
+            return None
 
     def _clear_stored_token(self) -> None:
         """Clear token from keyring."""
@@ -568,9 +576,14 @@ class DefaultAuth(AuthBase):
             self._auth_strategy = TokenAuth(token)
             return self._auth_strategy
 
-        # 2. Try OAuth2 with stored credentials
+        # 2. Try OAuth2 with stored credentials. If the keyring read raises
+        #    (corrupted blob, OS-level keyring error), treat it as "no stored
+        #    token" and fall through to interactive OAuth2.
         oauth2_auth = OAuth2Auth()
-        stored_token = oauth2_auth._retrieve_stored_token()
+        try:
+            stored_token = oauth2_auth._retrieve_stored_token()
+        except Exception:
+            stored_token = None
         if stored_token:
             self._auth_strategy = oauth2_auth
             return self._auth_strategy
@@ -582,6 +595,15 @@ class DefaultAuth(AuthBase):
     def get_access_token(self) -> str:
         """Get access token using the best available method."""
         return self._get_auth_strategy().get_access_token()
+
+    def __call__(self, request: requests.PreparedRequest) -> requests.PreparedRequest:
+        """Delegate request signing to the resolved auth strategy.
+
+        Override the default :class:`AuthBase` implementation: each strategy
+        already knows how to attach itself to a request (TokenAuth/ServiceAccount/
+        OAuth2 all set a ``Bearer`` header), so DefaultAuth just forwards.
+        """
+        return self._get_auth_strategy()(request)
 
 
 # PyGithub-style Auth namespace
