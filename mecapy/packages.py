@@ -331,8 +331,8 @@ class Package:
 
     Examples
     --------
-    >>> pkg = client.load("e25-030-1")
-    >>> result = pkg.min_preload(bolt=..., assembly=..., loads=..., tightening=...)
+    >>> pkg = client.load("acme/eurocode-1-1-4")
+    >>> result = pkg.qp(vb_0=26, z=10, terrain="II", ...)
     """
 
     def __init__(self, package_id: str, name: str, client: MecaPyClient) -> None:

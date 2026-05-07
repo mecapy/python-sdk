@@ -326,39 +326,109 @@ class MecaPyClient:
         data = self._json(response)
         return AdminResponse(**data)
 
-    def load(self, name_or_id: str) -> Package:
-        """Load a deployed package by name or ID.
+    def load(self, identifier: str) -> Package | Workflow:
+        """Load a deployed package or workflow by namespace path.
 
         Parameters
         ----------
-        name_or_id : str
-            Package name (e.g. ``"e25-030-1"``) or UUID.
+        identifier : str
+            Namespace path (FRO-namespace, session 53) :
+            ``"{owner}/{name}[:{version}]"``. Resolved via the
+            ``/registry/lookup`` endpoint. The result polymorphs to
+            :class:`Package` or :class:`mecapy.workflows.Workflow`
+            depending on what matched. Examples::
+
+                client.load("acme/eurocode-1-1-4")  # latest pkg
+                client.load("acme/eurocode-1-1-4:0.2.0")  # pinned pkg
+                client.load("acme/panneau-pub")  # latest wf
+                client.load("acme/panneau-pub:0.3.0")  # pinned wf
 
         Returns
         -------
-        Package
-            Package object whose functions are accessible as attributes.
+        Package | Workflow
+            * :class:`Package` whose functions are accessible as attributes
+              (``pkg.min_preload(...)``).
+            * :class:`Workflow` callable directly with keyword inputs
+              (``wf(F=..., h=...)``).
 
         Raises
         ------
         NotFoundError
-            If no package with that name or ID exists.
+            If no artefact matches the identifier.
+        ValidationError
+            If ``identifier`` is not a valid namespace path.
 
         Examples
         --------
-        >>> pkg = client.load("e25-030-1")
-        >>> result = pkg.min_preload(bolt=..., assembly=..., loads=..., tightening=...)
+        >>> pkg = client.load("acme/eurocode-1-1-4:0.2.0")
+        >>> result = pkg.qp(vb_0=26, z=10, terrain="II", ...)
+
+        >>> wf = client.load("acme/panneau-pub:0.3.0")
+        >>> outputs = wf(F=12.5, h=2.0)
+        """
+        if "/" not in identifier:
+            raise ValidationError(
+                f"Invalid identifier {identifier!r}: expected "
+                "'{owner}/{name}[:{version}]' (e.g. 'acme/eurocode-1-1-4:0.2.0')"
+            )
+        owner, rest = identifier.split("/", 1)
+        if ":" in rest:
+            slug, version = rest.split(":", 1)
+        else:
+            slug, version = rest, None
+
+        return self._load_via_registry(owner=owner, slug=slug, version=version)
+
+    def _load_via_registry(
+        self,
+        *,
+        owner: str,
+        slug: str,
+        version: str | None,
+    ) -> Package | Workflow:
+        """Resolve a namespace path against /registry/lookup.
+
+        Tries workflow first, falls back to package on 404. The order is
+        chosen so that a fresh user typing ``acme/panneau-pub`` (which
+        doesn't exist on either side yet) gets the package error message
+        — the more common case in the wild.
         """
         from .packages import Package
+        from .workflows import Workflow
 
-        resp = self._make_request("GET", "/packages")
-        packages = resp.json().get("packages", [])
+        params: dict[str, str] = {"owner": owner, "slug": slug}
+        if version is not None:
+            params["version"] = version
 
-        for pkg in packages:
-            if pkg.get("id") == name_or_id or pkg.get("name") == name_or_id:
-                return Package(package_id=pkg["id"], name=pkg["name"], client=self)
+        # Try workflow lookup first.
+        try:
+            resp = self._make_request("GET", "/registry/lookup/workflow", params=params)
+        except NotFoundError:
+            wf_data = None
+        else:
+            wf_data = resp.json()
 
-        raise NotFoundError(f"Package '{name_or_id}' not found")
+        if wf_data is not None:
+            return Workflow(
+                workflow_id=wf_data["workflow_id"],
+                slug=wf_data["slug"],
+                owner=wf_data["owner"],
+                version=wf_data["version"],
+                client=self,
+            )
+
+        # Fall back to package lookup. The registry route uses ``name``
+        # for packages, so re-key the params.
+        pkg_params: dict[str, str] = {"owner": owner, "name": slug}
+        if version is not None:
+            pkg_params["version"] = version
+        resp = self._make_request("GET", "/registry/lookup/package", params=pkg_params)
+        pkg_data = resp.json()
+        return Package(
+            package_id=pkg_data["package_id"],
+            name=pkg_data["name"],
+            client=self,
+        )
 
     # Upload endpoints
     def upload_archive(self, file: str | Path | BinaryIO, filename: str | None = None) -> UploadResponse:

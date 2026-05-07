@@ -7,7 +7,7 @@ import pytest
 
 from mecapy import MecaPyClient
 from mecapy.auth import Auth
-from mecapy.exceptions import ExecutionError, NotFoundError, ValidationError
+from mecapy.exceptions import ExecutionError, ValidationError
 from mecapy.packages import (
     Function,
     Job,
@@ -223,50 +223,13 @@ class TestPackage:
 
 @pytest.mark.unit
 class TestClientLoad:
-    def test_load_by_name(self):
-        client = make_client()
-        packages_resp = mock_response(
-            200,
-            {
-                "packages": [
-                    {"id": "uuid-1", "name": "e25-030-1"},
-                    {"id": "uuid-2", "name": "other-pkg"},
-                ]
-            },
-        )
-        with patch.object(client, "_make_request", return_value=packages_resp):
-            pkg = client.load("e25-030-1")
-        assert isinstance(pkg, Package)
-        assert pkg._id == "uuid-1"
-        assert pkg._name == "e25-030-1"
+    """The namespace-only contract for ``client.load`` is covered in
+    ``tests/test_workflows.py::TestClientLoadNamespace``. This stub kept
+    so ``test_packages.py::TestClientLoad`` doesn't disappear from the
+    grep radar — see the namespace tests for behaviour.
+    """
 
-    def test_load_by_id(self):
-        client = make_client()
-        packages_resp = mock_response(
-            200,
-            {
-                "packages": [
-                    {"id": "uuid-1", "name": "e25-030-1"},
-                ]
-            },
-        )
-        with patch.object(client, "_make_request", return_value=packages_resp):
-            pkg = client.load("uuid-1")
-        assert pkg._id == "uuid-1"
-
-    def test_load_not_found_raises(self):
-        client = make_client()
-        packages_resp = mock_response(
-            200,
-            {
-                "packages": [
-                    {"id": "uuid-1", "name": "other-pkg"},
-                ]
-            },
-        )
-        with patch.object(client, "_make_request", return_value=packages_resp):
-            with pytest.raises(NotFoundError, match="unknown-pkg"):
-                client.load("unknown-pkg")
+    pass
 
 
 # ---------------------------------------------------------------------------

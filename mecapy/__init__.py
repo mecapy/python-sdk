@@ -13,6 +13,7 @@ from .config import Config
 from .exceptions import ExecutionError
 from .models import AdminResponse, APIResponse, ProtectedResponse, UploadResponse, UserInfo
 from .packages import Function, Job, Package
+from .workflows import Workflow, WorkflowRun
 
 __all__ = [
     "MecaPyClient",
@@ -33,5 +34,7 @@ __all__ = [
     "Package",
     "Function",
     "Job",
+    "Workflow",
+    "WorkflowRun",
     "version",
 ]
